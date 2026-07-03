@@ -200,7 +200,15 @@ const canonicalUrl = `${SITE_CONFIG.url}/games/${game.slug}/`;
 
   .related-games-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: var(--space-6);
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+  }
+
+  @media (max-width: 768px) {
+    .related-games-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 480px) {
+    .related-games-grid { grid-template-columns: 1fr; }
   }
 </style>
