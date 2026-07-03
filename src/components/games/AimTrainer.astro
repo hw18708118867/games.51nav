@@ -1,0 +1,224 @@
+---
+// AimTrainer — click targets with difficulty levels
+---
+
+<div class="game-container" id="aim-trainer-game">
+  <div class="aim-area" id="aim-area">
+    <div class="aim-message" id="aim-message">Click to start</div>
+    <div class="aim-target" id="aim-target" style="display:none;"></div>
+    <div class="aim-spark" id="aim-spark" style="display:none;">+10</div>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="aim-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="aim-hits-display">0/0</span>
+      <span class="stat-label">Hits</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="aim-acc-display">0%</span>
+      <span class="stat-label">Accuracy</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="aim-time-display">30s</span>
+      <span class="stat-label">Time</span>
+    </div>
+  </div>
+
+  <div class="aim-actions">
+    <div class="aim-difficulty">
+      <button class="game-btn game-btn--secondary aim-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary aim-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary aim-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="aim-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = {
+    easy: { time: 30, size: [40, 60], speed: 1800, pts: 10 },
+    medium: { time: 30, size: [30, 50], speed: 1200, pts: 15 },
+    hard: { time: 30, size: [20, 40], speed: 700, pts: 25 },
+  };
+
+  const COLORS = ['#FF5252','#FF9100','#FFD740','#00E676','#00E5FF','#FF4081','#7C4DFF'];
+
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let score = 0, hits = 0, misses = 0, timeLeft = cfg.time;
+  let running = false;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let targetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const area = document.getElementById('aim-area')!;
+  const message = document.getElementById('aim-message')!;
+  const target = document.getElementById('aim-target')!;
+  const spark = document.getElementById('aim-spark')!;
+  const scoreEl = document.getElementById('aim-score-display')!;
+  const hitsEl = document.getElementById('aim-hits-display')!;
+  const accEl = document.getElementById('aim-acc-display')!;
+  const timeEl = document.getElementById('aim-time-display')!;
+
+  function update(): void {
+    scoreEl.textContent = String(score);
+    hitsEl.textContent = `${hits}/${hits + misses}`;
+    accEl.textContent = hits + misses > 0 ? `${Math.round((hits / (hits + misses)) * 100)}%` : '0%';
+    timeEl.textContent = `${timeLeft}s`;
+  }
+
+  function spawn(): void {
+    if (!running) return;
+    const pad = cfg.size[1] / 2 + 10;
+    const x = pad + Math.random() * (area.clientWidth - pad * 2);
+    const y = pad + Math.random() * (area.clientHeight - pad * 2);
+    const size = cfg.size[0] + Math.random() * (cfg.size[1] - cfg.size[0]);
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    target.style.left = `${x}px`;
+    target.style.top = `${y}px`;
+    target.style.width = `${size}px`;
+    target.style.height = `${size}px`;
+    target.style.background = color;
+    target.style.boxShadow = `0 0 20px ${color}80, 0 0 40px ${color}40`;
+    target.style.display = 'block';
+    target.style.transform = 'translate(-50%, -50%) scale(0)';
+    target.style.transition = 'none';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        target.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        target.style.transform = 'translate(-50%, -50%) scale(1)';
+      });
+    });
+
+    targetTimer = setTimeout(() => {
+      if (target.style.display !== 'none') { misses++; update(); }
+      target.style.display = 'none';
+      if (running) spawn();
+    }, cfg.speed);
+  }
+
+  function showSpark(x: number, y: number, pts: number): void {
+    spark.textContent = `+${pts}`;
+    spark.style.left = `${x}px`;
+    spark.style.top = `${y}px`;
+    spark.style.display = 'block';
+    spark.style.animation = 'none';
+    (spark as HTMLElement).offsetHeight;
+    spark.style.animation = 'aim-spark-pop 0.6s ease forwards';
+    setTimeout(() => { spark.style.display = 'none'; }, 600);
+  }
+
+  function start(): void {
+    score = 0; hits = 0; misses = 0; timeLeft = cfg.time;
+    running = true;
+    message.style.display = 'none';
+    update();
+    spawn();
+    timer = setInterval(() => { timeLeft--; update(); if (timeLeft <= 0) end(); }, 1000);
+  }
+
+  function end(): void {
+    running = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    if (targetTimer) { clearTimeout(targetTimer); targetTimer = null; }
+    target.style.display = 'none';
+    message.style.display = 'flex';
+    const acc = hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
+    message.textContent = `Score: ${score} · Accuracy: ${acc}%`;
+    saveScore('aim-trainer', score);
+    (window as any).__gameFeedback?.({
+      type: acc >= 60 ? 'win' : 'lose',
+      title: acc >= 60 ? 'Sharp Shooter!' : 'Keep Practicing!',
+      score: `${score} pts`,
+      detail: `${hits} hits · ${acc}% accuracy · ${difficulty}`,
+    });
+  }
+
+  target.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!running) return;
+    hits++;
+    const pts = cfg.pts;
+    score += pts;
+    update();
+    showSpark(parseInt(target.style.left), parseInt(target.style.top), pts);
+    target.style.display = 'none';
+    if (targetTimer) { clearTimeout(targetTimer); targetTimer = null; }
+    if (running) spawn();
+  });
+
+  area.addEventListener('click', e => {
+    if (e.target === target) return;
+    if (!running) { if (message.style.display !== 'none') start(); }
+    else { misses++; update(); area.classList.add('aim-miss'); setTimeout(() => area.classList.remove('aim-miss'), 300); }
+  });
+
+  function init(): void {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (targetTimer) { clearTimeout(targetTimer); targetTimer = null; }
+    running = false; score = 0; hits = 0; misses = 0;
+    cfg = DIFF[difficulty]; timeLeft = cfg.time;
+    target.style.display = 'none';
+    message.textContent = 'Click to start';
+    message.style.display = 'flex';
+    update();
+  }
+
+  document.querySelectorAll('.aim-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.aim-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('aim-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #aim-trainer-game .aim-area {
+    position: relative; background: var(--bg-tertiary); border: 2px solid var(--border-medium);
+    border-radius: var(--radius-lg); height: 400px; cursor: crosshair; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  #aim-trainer-game .aim-area.aim-miss { border-color: var(--accent-red); animation: aim-shake 0.3s ease; }
+  @keyframes aim-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+
+  #aim-trainer-game .aim-message {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 1.5rem; color: var(--text-primary); pointer-events: none;
+  }
+
+  #aim-trainer-game .aim-target {
+    position: absolute; border-radius: 50%; cursor: pointer; transform: translate(-50%, -50%);
+    transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    animation: aim-pulse 1s ease-in-out infinite;
+  }
+  @keyframes aim-pulse { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.3)} }
+
+  #aim-trainer-game .aim-spark {
+    position: absolute; pointer-events: none; z-index: 5;
+    font-family: var(--font-display); font-size: 1.5rem; font-weight: 800;
+    color: var(--accent-cyan); text-shadow: 0 0 8px rgba(0,229,255,0.5);
+    transform: translate(-50%, -50%);
+  }
+  @keyframes aim-spark-pop {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+    50% { opacity: 1; transform: translate(-50%, -80%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -120%) scale(1); }
+  }
+
+  #aim-trainer-game .aim-actions { text-align: center; margin-top: var(--space-6); }
+  #aim-trainer-game .aim-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #aim-trainer-game .aim-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #aim-trainer-game .aim-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+
+  @media (max-width: 768px) { #aim-trainer-game .aim-area { height: 300px; } }
+</style>

@@ -1,0 +1,188 @@
+---
+// TypingTest — WPM with difficulty and live highlighting
+---
+
+<div class="game-container" id="typing-test-game">
+  <!-- Progress bar -->
+  <div class="tt-progress-bar"><div class="tt-progress-fill" id="tt-progress"></div><div class="tt-progress-ghost" id="tt-ghost" style="display:none"></div></div>
+  <div class="typing-display">
+    <div class="typing-text" id="target-text"></div>
+    <div class="typing-input-wrapper">
+      <textarea id="typing-input" class="typing-input" placeholder="Start typing here..." rows="3" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="wpm-display">0</span><span class="stat-label">WPM</span></div>
+    <div class="stat"><span class="stat-value" id="accuracy-display">0%</span><span class="stat-label">Accuracy</span></div>
+    <div class="stat"><span class="stat-value" id="time-display">0s</span><span class="stat-label">Time</span></div>
+    <div class="stat"><span class="stat-value" id="chars-display">0</span><span class="stat-label">Chars</span></div>
+  </div>
+
+  <div class="typing-actions">
+    <div class="typing-difficulty"><button class="game-btn game-btn--secondary tt-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary tt-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary tt-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="restart-btn">Restart Test</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const PASSAGES = {
+    easy: [
+      "The quick brown fox jumps over the lazy dog.",
+      "A journey of a thousand miles begins with a single step.",
+      "The only way to do great work is to love what you do.",
+      "Success is not final, failure is not fatal.",
+      "In the middle of difficulty lies opportunity.",
+    ],
+    medium: [
+      "The quick brown fox jumps over the lazy dog. This classic pangram contains every letter of the English alphabet.",
+      "A journey of a thousand miles begins with a single step. Take your time and focus on accuracy rather than speed.",
+      "The only way to do great work is to love what you do. If you haven't found it yet, keep looking.",
+      "Success is not final, failure is not fatal. It is the courage to continue that counts.",
+      "In the middle of difficulty lies opportunity. Every challenge is a chance to grow and improve.",
+    ],
+    hard: [
+      "The quick brown fox jumps over the lazy dog. This classic pangram contains every letter of the English alphabet at least once. Practice makes perfect.",
+      "A journey of a thousand miles begins with a single step. Take your time and focus on accuracy rather than speed. Consistency is the key to mastery.",
+      "The only way to do great work is to love what you do. If you haven't found it yet, keep looking. Don't settle. Stay hungry, stay foolish.",
+      "Success is not final, failure is not fatal. It is the courage to continue that counts. Keep pushing forward no matter what obstacles you face.",
+      "In the middle of difficulty lies opportunity. Every challenge you face is a chance to grow and improve yourself. Embrace the struggle.",
+    ],
+  };
+
+  let diff: keyof typeof PASSAGES = 'easy';
+  let passage = '';
+  let startTime = 0;
+  let running = false;
+  let over = false;
+
+  const targetEl = document.getElementById('target-text')!;
+  const inp = document.getElementById('typing-input') as HTMLTextAreaElement;
+  const wpmEl = document.getElementById('wpm-display')!;
+  const accEl = document.getElementById('accuracy-display')!;
+  const timeEl = document.getElementById('time-display')!;
+  const charsEl = document.getElementById('chars-display')!;
+  const progressEl = document.getElementById('tt-progress')!;
+  const ghostEl = document.getElementById('tt-ghost')!;
+
+  function pick(): string { const p = PASSAGES[diff]; return p[Math.floor(Math.random() * p.length)]; }
+
+  function renderHighlight(): void {
+    const input = inp.value;
+    let html = '';
+    for (let i = 0; i < passage.length; i++) {
+      if (i < input.length) {
+        html += input[i] === passage[i]
+          ? `<span class="tt-correct">${passage[i]}</span>`
+          : `<span class="tt-wrong">${passage[i]}</span>`;
+      } else if (i === input.length) {
+        html += `<span class="tt-cursor">${passage[i]}</span>`;
+      } else {
+        html += passage[i];
+      }
+    }
+    targetEl.innerHTML = html;
+  }
+
+  function calc(): { wpm: number; accuracy: number; seconds: number; chars: number } {
+    const input = inp.value;
+    const elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
+    let correct = 0;
+    for (let i = 0; i < Math.min(input.length, passage.length); i++) {
+      if (input[i] === passage[i]) correct++;
+    }
+    const accuracy = input.length > 0 ? (correct / input.length) * 100 : 0;
+    const errors = Math.max(0, input.length - correct);
+    const netWords = Math.max(0, (correct - errors) / 5);
+    const wpm = elapsed > 0 ? netWords / (elapsed / 60) : 0;
+    return { wpm: Math.max(0, Math.round(wpm)), accuracy: Math.round(accuracy), seconds: Math.round(elapsed), chars: input.length };
+  }
+
+  function update(): void {
+    const s = calc();
+    wpmEl.textContent = String(s.wpm);
+    accEl.textContent = `${s.accuracy}%`;
+    timeEl.textContent = `${s.seconds}s`;
+    charsEl.textContent = String(s.chars);
+    // Progress bar
+    const pct = Math.min(100, (inp.value.length / passage.length) * 100);
+    progressEl.style.width = `${pct}%`;
+    // Ghost target (pacesetter at 50 WPM)
+    if (running) {
+      ghostEl.style.display = 'block';
+      const elapsed = (Date.now() - startTime) / 1000;
+      const ghostPct = Math.min(100, (elapsed * 50 / 5 / passage.length) * 100 * 5);
+      ghostEl.style.left = `${ghostPct}%`;
+    }
+  }
+
+  function finish(): void {
+    running = false; over = true;
+    inp.disabled = true;
+    const s = calc();
+    saveScore('typing-test', s.wpm);
+    update();
+    const rating = s.wpm >= 60 ? 'Excellent!' : s.wpm >= 40 ? 'Great!' : s.wpm >= 30 ? 'Good!' : 'Test Complete';
+    (window as any).__gameFeedback?.({ type: s.wpm >= 30 ? 'win' : 'lose', title: rating, score: `${s.wpm} WPM`, detail: `${s.accuracy}% accuracy · ${diff}` });
+  }
+
+  function init(): void {
+    passage = pick();
+    targetEl.textContent = passage;
+    inp.value = ''; inp.disabled = false; inp.focus();
+    startTime = 0; running = false; over = false;
+    progressEl.style.width = '0%'; ghostEl.style.display = 'none';
+    update();
+  }
+
+  inp.addEventListener('input', () => {
+    if (over) return;
+    if (!running && inp.value.length > 0) { running = true; startTime = Date.now(); }
+    if (running) { update(); renderHighlight(); }
+    if (inp.value.length >= passage.length) finish();
+  });
+
+  document.querySelectorAll('.tt-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.tt-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      diff = (b as HTMLElement).dataset.diff as keyof typeof PASSAGES;
+      init();
+    });
+  });
+  document.getElementById('restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #typing-test-game .tt-progress-bar { position: relative; height: 8px; background: var(--bg-tertiary); border-radius: 4px; margin-bottom: var(--space-4); overflow: visible; }
+  #typing-test-game .tt-progress-fill { height: 100%; width: 0%; background: var(--gradient-accent); border-radius: 4px; transition: width .3s ease; }
+  #typing-test-game .tt-progress-ghost { position: absolute; top: -4px; width: 4px; height: 16px; background: rgba(255,255,255,.5); border-radius: 2px; transition: left .3s linear; }
+  #typing-test-game .typing-display { margin-bottom: var(--space-6); }
+  #typing-test-game .typing-text {
+    background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md); padding: var(--space-6);
+    font-size: var(--text-lg); line-height: 1.8; color: var(--text-secondary);
+    margin-bottom: var(--space-4); min-height: 80px; user-select: none; font-family: var(--font-mono);
+  }
+  #typing-test-game .tt-correct { color: var(--accent-green); }
+  #typing-test-game .tt-wrong { color: var(--accent-red); background: rgba(255,82,82,0.15); border-radius: 2px; }
+  #typing-test-game .tt-cursor { background: var(--accent-cyan); color: #000; border-radius: 2px; animation: tt-blink 1s step-end infinite; }
+  @keyframes tt-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  #typing-test-game .typing-input {
+    width: 100%; background: var(--bg-tertiary); border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md); padding: var(--space-4); font-family: var(--font-mono);
+    font-size: var(--text-lg); color: var(--text-primary); resize: none; outline: none;
+    transition: border-color .2s;
+  }
+  #typing-test-game .typing-input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,229,255,.15); }
+  #typing-test-game .typing-input:disabled { opacity: .5; cursor: not-allowed; }
+
+  #typing-test-game .typing-actions { text-align: center; margin-top: var(--space-6); }
+  #typing-test-game .typing-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #typing-test-game .tt-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #typing-test-game .tt-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

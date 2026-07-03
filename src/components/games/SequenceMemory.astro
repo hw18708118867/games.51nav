@@ -1,0 +1,174 @@
+---
+// SequenceMemory — remember and repeat sequences with difficulty
+---
+
+<div class="game-container" id="sequence-memory-game">
+  <div class="seq-grid" id="seq-grid"></div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="seq-level-display">1</span>
+      <span class="stat-label">Level</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="seq-length-display">1</span>
+      <span class="stat-label">Length</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="seq-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+  </div>
+
+  <div class="seq-actions">
+    <div class="seq-difficulty">
+      <button class="game-btn game-btn--secondary seq-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary seq-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary seq-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="seq-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const TILES = 9;
+  const DIFF = { easy: { speed: 800, pts: 10 }, medium: { speed: 500, pts: 15 }, hard: { speed: 300, pts: 20 } };
+
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let sequence: number[] = [];
+  let playerIdx = 0;
+  let level = 1;
+  let score = 0;
+  let phase: 'show' | 'input' = 'show';
+  let showTimer: ReturnType<typeof setInterval> | null = null;
+  let over = false;
+
+  const grid = document.getElementById('seq-grid')!;
+  const levelEl = document.getElementById('seq-level-display')!;
+  const lenEl = document.getElementById('seq-length-display')!;
+  const scoreEl = document.getElementById('seq-score-display')!;
+
+  function render(): void {
+    grid.innerHTML = '';
+    for (let i = 0; i < TILES; i++) {
+      const tile = document.createElement('div');
+      tile.className = 'seq-tile';
+      tile.addEventListener('click', () => click(i));
+      grid.appendChild(tile);
+    }
+  }
+
+  function showSequence(): void {
+    if (over) return;
+    phase = 'show';
+    clearShowTimer();
+    let i = 0;
+    showTimer = setInterval(() => {
+      if (i > 0) (grid.children[sequence[i - 1]] as HTMLElement).classList.remove('active');
+      if (i < sequence.length) {
+        (grid.children[sequence[i]] as HTMLElement).classList.add('active');
+        i++;
+      } else {
+        clearShowTimer();
+        phase = 'input';
+        playerIdx = 0;
+      }
+    }, cfg.speed);
+  }
+
+  function clearShowTimer(): void {
+    if (showTimer) { clearInterval(showTimer); showTimer = null; }
+  }
+
+  function click(i: number): void {
+    if (phase !== 'input' || over) return;
+    const tile = grid.children[i] as HTMLElement;
+    tile.classList.add('pressed');
+    setTimeout(() => tile.classList.remove('pressed'), 200);
+
+    if (i === sequence[playerIdx]) {
+      playerIdx++;
+      if (playerIdx >= sequence.length) {
+        score += level * cfg.pts;
+        level++;
+        update();
+        // Add next tile to sequence
+        sequence.push(Math.floor(Math.random() * TILES));
+        setTimeout(() => showSequence(), 600);
+      }
+    } else {
+      // Wrong!
+      over = true;
+      clearShowTimer();
+      saveScore('sequence-memory', score);
+      // Flash all red
+      Array.from(grid.children).forEach(c => (c as HTMLElement).classList.add('wrong'));
+      // Show correct tile
+      if (sequence[playerIdx] !== undefined) {
+        (grid.children[sequence[playerIdx]] as HTMLElement).classList.add('active');
+      }
+      setTimeout(() => {
+        (window as any).__gameFeedback?.({ type: 'lose', title: 'Wrong Tile!', score: `Level ${level}`, detail: `Sequence length: ${sequence.length} · Score: ${score}` });
+      }, 600);
+    }
+  }
+
+  function update(): void {
+    levelEl.textContent = String(level);
+    lenEl.textContent = String(sequence.length);
+    scoreEl.textContent = String(score);
+  }
+
+  function init(): void {
+    cfg = DIFF[difficulty];
+    clearShowTimer();
+    sequence = [Math.floor(Math.random() * TILES)];
+    level = 1; score = 0; playerIdx = 0; over = false;
+    update();
+    render();
+    setTimeout(() => showSequence(), 500);
+  }
+
+  document.querySelectorAll('.seq-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.seq-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('seq-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #sequence-memory-game .seq-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    max-width: 330px; margin: 0 auto;
+  }
+  #sequence-memory-game .seq-tile {
+    aspect-ratio: 1; background: var(--bg-tertiary); border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s;
+  }
+  #sequence-memory-game .seq-tile.active {
+    background: var(--accent-cyan); border-color: var(--accent-cyan);
+    box-shadow: 0 0 20px rgba(0,229,255,0.5); transform: scale(1.08);
+  }
+  #sequence-memory-game .seq-tile.pressed {
+    background: var(--accent-purple); border-color: var(--accent-purple);
+    box-shadow: 0 0 12px rgba(124,77,255,0.3);
+  }
+  #sequence-memory-game .seq-tile.wrong {
+    background: var(--accent-red) !important; border-color: var(--accent-red) !important;
+    animation: seq-shake 0.3s ease;
+  }
+  @keyframes seq-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+  #sequence-memory-game .seq-tile:hover { border-color: var(--border-strong); }
+  #sequence-memory-game .seq-actions { text-align: center; margin-top: var(--space-6); }
+  #sequence-memory-game .seq-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #sequence-memory-game .seq-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #sequence-memory-game .seq-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

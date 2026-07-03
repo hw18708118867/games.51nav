@@ -1,0 +1,206 @@
+---
+import { SITE_CONFIG } from '../lib/constants';
+import type { GameMeta } from '../types/game';
+import GameJsonLd from '../components/seo/GameJsonLd.astro';
+import BreadcrumbJsonLd from '../components/seo/BreadcrumbJsonLd.astro';
+import BaseLayout from './BaseLayout.astro';
+import Header from '../components/layout/Header.astro';
+import Footer from '../components/layout/Footer.astro';
+import GameShell from '../components/effects/GameShell.astro';
+// import AdUnit from '../components/ads/AdUnit.astro'; // Disabled until AdSense integration
+
+interface Props {
+  game: GameMeta;
+}
+
+const { game } = Astro.props;
+const pageTitle = `${game.seoTitle || game.title} | ${SITE_CONFIG.name}`;
+const pageDescription = game.seoDescription || game.description;
+const canonicalUrl = `${SITE_CONFIG.url}/games/${game.slug}/`;
+---
+
+<BaseLayout
+  title={pageTitle}
+  description={pageDescription}
+  canonicalUrl={canonicalUrl}
+>
+  <Header />
+
+  <main class="container">
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/">Home</a></li>
+        <li><span aria-current="page">{game.shortTitle}</span></li>
+      </ol>
+    </nav>
+
+    <!-- Game Hero -->
+    <section class="game-hero">
+      <div class="game-hero-content">
+        <div class="game-hero-badges">
+          <span class="badge badge--{game.difficulty}">{game.difficulty}</span>
+          <span class="badge badge--category">{game.category}</span>
+        </div>
+        <h1>{game.title}</h1>
+        <p class="game-hero-description">{game.description}</p>
+      </div>
+    </section>
+
+    <!-- Ad: Top Banner — disabled until AdSense integration -->
+    <!-- <AdUnit slot="topBanner" format="horizontal" /> -->
+
+    <!-- Game Component -->
+    <GameShell heroColor={game.heroColor} category={game.category}>
+      <slot name="game" />
+    </GameShell>
+
+    <!-- Score Display -->
+    <div class="game-score-section" id="score-section" style="display: none;">
+      <slot name="score" />
+    </div>
+
+    <!-- Tutorial Section -->
+    <section class="content-section" id="tutorial">
+      <h2>{game.tutorial.title}</h2>
+      <div class="tutorial-steps">
+        {game.tutorial.steps.map((step) => (
+          <div class="tutorial-step">
+            <span class="tutorial-step-number">{step.step}</span>
+            <p class="tutorial-step-content">{step.instruction}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Tips Section -->
+    <section class="content-section" id="tips">
+      <h2>Tips to Improve Your Score</h2>
+      <ul class="tips-list">
+        {game.tips.map((tip) => (
+          <li>{tip}</li>
+        ))}
+      </ul>
+    </section>
+
+    <!-- Ad: Mid-Content — disabled until AdSense integration -->
+    <!-- <AdUnit slot="inContent" format="rectangle" /> -->
+
+    <!-- FAQ Section -->
+    <section class="content-section" id="faq">
+      <h2>Frequently Asked Questions</h2>
+      <div class="faq-list">
+        {game.faq.map((item) => (
+          <div class="faq-item">
+            <h3 class="faq-question">{item.question}</h3>
+            <p class="faq-answer">{item.answer}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Blog Content Section -->
+    <section class="content-section" id="content">
+      <slot name="content" />
+    </section>
+
+    <!-- Related Games -->
+    {
+      game.relatedGames.length > 0 && (
+        <section class="content-section" id="related">
+          <h2>Related Games</h2>
+          <div class="related-games-grid">
+            <slot name="related" />
+          </div>
+        </section>
+      )
+    }
+
+    <!-- Ad: Bottom Banner — disabled until AdSense integration -->
+    <!-- <AdUnit slot="bottomBanner" format="horizontal" /> -->
+  </main>
+
+  <Footer />
+
+  <!-- Structured Data -->
+  <GameJsonLd game={game} />
+  <BreadcrumbJsonLd
+    items={[
+      { name: 'Home', url: SITE_CONFIG.url },
+      { name: game.shortTitle, url: canonicalUrl },
+    ]}
+  />
+</BaseLayout>
+
+<style>
+  .breadcrumb {
+    padding: var(--space-4) 0;
+    font-size: var(--text-sm);
+  }
+
+  .breadcrumb ol {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    gap: var(--space-2);
+    margin: 0;
+  }
+
+  .breadcrumb li {
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  .breadcrumb li:not(:last-child)::after {
+    content: '/';
+    margin-left: var(--space-2);
+    color: var(--text-muted);
+  }
+
+  .breadcrumb a {
+    color: var(--text-secondary);
+  }
+
+  .breadcrumb a:hover {
+    color: var(--accent-cyan);
+  }
+
+  .game-hero {
+    text-align: center;
+    padding: var(--space-12) 0 var(--space-8);
+  }
+
+  .game-hero-badges {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: center;
+    margin-bottom: var(--space-4);
+  }
+
+  .badge--category {
+    background: rgba(0, 229, 255, 0.1);
+    color: var(--accent-cyan);
+  }
+
+  .game-hero h1 {
+    font-size: var(--text-4xl);
+    margin-bottom: var(--space-4);
+  }
+
+  .game-hero-description {
+    font-size: var(--text-lg);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .game-score-section {
+    text-align: center;
+    margin: var(--space-8) 0;
+  }
+
+  .related-games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-6);
+  }
+</style>

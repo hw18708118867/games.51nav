@@ -1,0 +1,44 @@
+---
+import { SITE_CONFIG } from '../../lib/constants';
+import type { GameMeta } from '../../types/game';
+
+interface Props {
+  game: GameMeta;
+}
+
+const { game } = Astro.props;
+const canonicalUrl = `${SITE_CONFIG.url}/games/${game.slug}/`;
+---
+
+<script type="application/ld+json" set:html={JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: game.title,
+  url: canonicalUrl,
+  description: game.description,
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Web',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+  author: {
+    '@type': 'Organization',
+    name: SITE_CONFIG.name,
+    url: SITE_CONFIG.url,
+  },
+})} />
+
+<script type="application/ld+json" set:html={JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: game.faq.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer,
+    },
+  })),
+})} />

@@ -1,0 +1,132 @@
+---
+// LogicGrid — deductive reasoning with difficulty
+---
+
+<div class="game-container" id="logic-grid-game">
+  <div class="lg-story" id="lg-story"></div>
+  <div class="lg-clues"><h4>Clues:</h4><ol id="lg-clues-list"></ol></div>
+  <div class="lg-grid" id="lg-grid"></div>
+  <div class="lg-feedback" id="lg-feedback"></div>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="lg-score-display">0</span><span class="stat-label">Score</span></div>
+    <div class="stat"><span class="stat-value" id="lg-puzzle-display">1/5</span><span class="stat-label">Puzzle</span></div>
+  </div>
+  <div class="lg-actions">
+    <div class="lg-difficulty"><button class="game-btn game-btn--secondary lg-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary lg-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary lg-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="lg-check-btn">Check Answer</button>
+    <button class="game-btn game-btn--secondary" id="lg-restart-btn">New Puzzle</button>
+  </div>
+</div>
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const PUZZLES = {
+    easy: [
+      { story: 'Alice, Bob, and Charlie each have a different pet: a cat, a dog, and a bird.', names: ['Alice','Bob','Charlie'], values: ['Cat','Dog','Bird'], clues: ['Alice is allergic to cats.','Bob\'s pet can fly.','Charlie doesn\'t have a dog.'], solution: { Alice:'Dog', Bob:'Bird', Charlie:'Cat' } },
+      { story: 'Three people ordered different drinks: coffee, tea, and juice.', names: ['Emma','Liam','Sophia'], values: ['Coffee','Tea','Juice'], clues: ['Emma doesn\'t drink caffeine.','Liam\'s drink is hot.','Sophia prefers something fruity.'], solution: { Emma:'Juice', Liam:'Coffee', Sophia:'Tea' } },
+      { story: 'Three cars are parked in spots 1, 2, and 3. Each is a different color.', names: ['Spot 1','Spot 2','Spot 3'], values: ['Red','Blue','Green'], clues: ['The red car is not in spot 1.','The car in spot 2 is blue.','The green car is next to the red car.'], solution: { 'Spot 1':'Green', 'Spot 2':'Blue', 'Spot 3':'Red' } },
+    ],
+    medium: [
+      { story: 'Four friends — Anna, Ben, Clara, and Dan — each have a different favorite season.', names: ['Anna','Ben','Clara','Dan'], values: ['Spring','Summer','Autumn','Winter'], clues: ['Anna loves flowers blooming.','Ben hates cold weather.','Clara\'s favorite season comes after Summer.','Dan loves snow.'], solution: { Anna:'Spring', Ben:'Summer', Clara:'Autumn', Dan:'Winter' } },
+      { story: 'Four students scored differently on a test. Who got which grade?', names: ['Mia','Noah','Olivia','Ethan'], values: ['A','B','C','D'], clues: ['Mia scored higher than Noah.','Olivia did not get an A.','Ethan scored the lowest.','Noah got a B.'], solution: { Mia:'A', Noah:'B', Olivia:'C', Ethan:'D' } },
+    ],
+    hard: [
+      { story: 'Five people live on different floors (1-5). Who lives where?', names: ['Floor 1','Floor 2','Floor 3','Floor 4','Floor 5'], values: ['Alex','Blake','Casey','Drew','Ellis'], clues: ['Alex lives above Blake.','Casey lives on the top floor.','Drew lives on floor 1.','Ellis lives between Alex and Blake.','Blake is not on floor 2.'], solution: { 'Floor 1':'Drew', 'Floor 2':'Blake', 'Floor 3':'Ellis', 'Floor 4':'Alex', 'Floor 5':'Casey' } },
+    ],
+  };
+
+  const DIFF = { easy: { total: 3, pts: 20 }, medium: { total: 2, pts: 30 }, hard: { total: 1, pts: 50 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  let puzzleIdx = 0, num = 1, score = 0, used: number[] = [];
+
+  const storyEl = document.getElementById('lg-story')!, cluesEl = document.getElementById('lg-clues-list')!;
+  const gridEl = document.getElementById('lg-grid')!, fbEl = document.getElementById('lg-feedback')!;
+  const sEl = document.getElementById('lg-score-display')!, pEl = document.getElementById('lg-puzzle-display')!;
+
+  function render(): void {
+    if (num > cfg.total) { finish(); return; }
+    const pool = PUZZLES[diff];
+    const avail = pool.map((_,i)=>i).filter(i=>!used.includes(i));
+    if (!avail.length) { used = []; render(); return; }
+    puzzleIdx = avail[Math.floor(Math.random() * avail.length)];
+    used.push(puzzleIdx);
+    const p = pool[puzzleIdx];
+
+    storyEl.innerHTML = `<p>${p.story}</p>`;
+    cluesEl.innerHTML = p.clues.map(c => `<li>${c}</li>`).join('');
+    fbEl.textContent = '';
+
+    gridEl.innerHTML = `<div class="lg-grid-header"><div class="lg-cell lg-header"></div>${p.values.map(v=>`<div class="lg-cell lg-header">${v}</div>`).join('')}</div>${p.names.map(n=>`<div class="lg-grid-row"><div class="lg-cell lg-row-header">${n}</div>${p.values.map(v=>`<div class="lg-cell lg-check"><input type="radio" name="${n.replace(/ /g,'_')}" value="${v}"/></div>`).join('')}</div>`).join('')}`;
+  }
+
+  function check(): void {
+    const p = PUZZLES[diff][puzzleIdx];
+    let ok = true;
+    p.names.forEach(n => {
+      const checked = gridEl.querySelector(`input[name="${n.replace(/ /g,'_')}"]:checked`) as HTMLInputElement;
+      if (!checked || checked.value !== p.solution[n]) ok = false;
+    });
+    if (ok) {
+      score += cfg.pts; num++;
+      fbEl.innerHTML = '<span class="lg-ok">✓ Correct!</span>';
+      fbEl.classList.add('lg-fb-pop');
+      setTimeout(() => fbEl.classList.remove('lg-fb-pop'), 400);
+      update();
+      if (num > cfg.total) finish();
+      else setTimeout(() => render(), 800);
+    } else {
+      fbEl.innerHTML = '<span class="lg-err">✗ Not quite. Check the clues.</span>';
+      fbEl.classList.add('lg-fb-pop');
+      setTimeout(() => fbEl.classList.remove('lg-fb-pop'), 400);
+    }
+  }
+
+  function update(): void { sEl.textContent = String(score); pEl.textContent = `${Math.min(num, cfg.total)}/${cfg.total}`; }
+
+  function finish(): void {
+    saveScore('logic-grid', score);
+    fbEl.innerHTML = '<span class="lg-ok">All puzzles complete!</span>';
+    (window as any).__gameFeedback?.({ type: 'win', title: 'Logic Master!', score: `${score} pts`, detail: `${diff} · ${cfg.total} puzzles` });
+  }
+
+  function init(): void {
+    cfg = DIFF[diff]; puzzleIdx = 0; num = 1; score = 0; used = [];
+    fbEl.textContent = ''; update(); render();
+  }
+
+  document.getElementById('lg-check-btn')!.addEventListener('click', check);
+  document.querySelectorAll('.lg-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.lg-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('lg-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+<style is:global>
+  #logic-grid-game .lg-story { margin-bottom: var(--space-4); }
+  #logic-grid-game .lg-story p { color: var(--text-secondary); }
+  #logic-grid-game .lg-clues { margin-bottom: var(--space-4); }
+  #logic-grid-game .lg-clues h4 { margin-bottom: var(--space-2); }
+  #logic-grid-game .lg-clues li { color: var(--text-secondary); margin-bottom: var(--space-1); }
+  #logic-grid-game .lg-grid { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-4); overflow-x: auto; }
+  #logic-grid-game .lg-grid-header, #logic-grid-game .lg-grid-row { display: flex; gap: 2px; }
+  #logic-grid-game .lg-cell { padding: var(--space-2) var(--space-3); min-width: 80px; text-align: center; font-size: var(--text-sm); }
+  #logic-grid-game .lg-header { background: var(--bg-tertiary); font-weight: 600; color: var(--accent-cyan); border-radius: var(--radius-sm); }
+  #logic-grid-game .lg-row-header { background: var(--bg-tertiary); font-weight: 600; border-radius: var(--radius-sm); }
+  #logic-grid-game .lg-check { background: var(--bg-tertiary); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; transition: background .15s; }
+  #logic-grid-game .lg-check:hover { background: var(--bg-hover); }
+  #logic-grid-game .lg-check input { cursor: pointer; accent-color: var(--accent-cyan); }
+  #logic-grid-game .lg-feedback { text-align: center; min-height: 24px; margin-bottom: var(--space-4); font-weight: 600; }
+  #logic-grid-game .lg-feedback.lg-fb-pop { animation: lg-fb-pop .3s ease; }
+  @keyframes lg-fb-pop { 0%{transform:scale(.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+  #logic-grid-game .lg-ok { color: var(--accent-green); }
+  #logic-grid-game .lg-err { color: var(--accent-red); }
+  #logic-grid-game .lg-actions { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; margin-top: var(--space-4); }
+  #logic-grid-game .lg-difficulty { display: flex; gap: var(--space-2); justify-content: center; width: 100%; margin-bottom: var(--space-2); }
+  #logic-grid-game .lg-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #logic-grid-game .lg-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

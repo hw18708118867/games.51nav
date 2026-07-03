@@ -1,0 +1,109 @@
+---
+import { SITE_CONFIG } from '../../lib/constants';
+
+interface Props {
+  gameSlug: string;
+  gameTitle: string;
+  score: number;
+  scoreUnit: string;
+}
+
+const { gameSlug, gameTitle, score, scoreUnit } = Astro.props;
+const shareUrl = `${SITE_CONFIG.url}/games/${gameSlug}/`;
+const shareText = `I scored ${score} ${scoreUnit} on "${gameTitle}" at ${SITE_CONFIG.name}! Can you beat my score?`;
+const encodedText = encodeURIComponent(shareText);
+const encodedUrl = encodeURIComponent(shareUrl);
+---
+
+<div class="share-buttons">
+  <span class="share-label">Share your score:</span>
+  <div class="share-links">
+    <a
+      href={`https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`}
+      class="share-btn share-btn--twitter"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Share on Twitter"
+    >𝕏</a>
+    <a
+      href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`}
+      class="share-btn share-btn--facebook"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Share on Facebook"
+    >f</a>
+    <button
+      class="share-btn share-btn--copy"
+      id="copy-share-btn"
+      aria-label="Copy link to clipboard"
+    >📋</button>
+  </div>
+</div>
+
+<script>
+  const copyBtn = document.getElementById('copy-share-btn');
+  copyBtn?.addEventListener('click', () => {
+    navigator.clipboard.writeText(`${shareUrl}?ref=share`).then(() => {
+      copyBtn.textContent = '✓';
+      setTimeout(() => {
+        copyBtn.textContent = '📋';
+      }, 2000);
+    });
+  });
+</script>
+
+<style>
+  .share-buttons {
+    text-align: center;
+    margin: var(--space-6) 0;
+  }
+
+  .share-label {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+  }
+
+  .share-links {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-3);
+  }
+
+  .share-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    font-weight: 700;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    border: 1px solid var(--border-medium);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: var(--text-lg);
+  }
+
+  .share-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow-cyan);
+  }
+
+  .share-btn--twitter:hover {
+    background: #000;
+    border-color: #fff;
+  }
+
+  .share-btn--facebook:hover {
+    background: #1877f2;
+    border-color: #1877f2;
+  }
+
+  .share-btn--copy {
+    font-size: var(--text-base);
+  }
+</style>

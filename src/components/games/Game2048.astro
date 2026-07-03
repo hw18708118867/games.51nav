@@ -1,0 +1,144 @@
+---
+// 2048 — tile merging with difficulty
+---
+
+<div class="game-container" id="game-2048">
+  <div class="g2048-header">
+    <div class="g2048-score-box"><span class="g2048-score-label">Score</span><span class="g2048-score-value" id="g2048-score">0</span></div>
+    <div class="g2048-score-box"><span class="g2048-score-label">Best</span><span class="g2048-score-value" id="g2048-best">0</span></div>
+  </div>
+  <div class="g2048-board" id="g2048-board"></div>
+  <div class="g2048-actions">
+    <div class="g2048-difficulty"><button class="game-btn game-btn--secondary g2-diff-btn active" data-diff="easy">4×4</button><button class="game-btn game-btn--secondary g2-diff-btn" data-diff="medium">5×5</button><button class="game-btn game-btn--secondary g2-diff-btn" data-diff="hard">6×6</button></div>
+    <button class="game-btn game-btn--primary" id="g2048-restart">New Game</button>
+  </div>
+  <p class="g2048-hint">Use arrow keys or swipe to move tiles</p>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+  const DIFF = { easy: 4, medium: 5, hard: 6 };
+  let diff: keyof typeof DIFF = 'easy', size = DIFF[diff];
+  let board: number[][] = [], score = 0;
+  let best = parseInt(localStorage.getItem('g2048-best') || '0');
+  let over = false, newTiles: [number,number][] = [], mergedTiles: [number,number][] = [];
+
+  const boardEl = document.getElementById('g2048-board')!, scoreEl = document.getElementById('g2048-score')!, bestEl = document.getElementById('g2048-best')!;
+
+  function empty(): [number,number][] { const e: [number,number][] = []; for (let r=0;r<size;r++)for(let c=0;c<size;c++)if(!board[r][c])e.push([r,c]); return e; }
+
+  function spawn(): void {
+    const e = empty(); if (!e.length) return;
+    const [r,c] = e[Math.floor(Math.random()*e.length)];
+    board[r][c] = Math.random() < 0.9 ? 2 : 4;
+    newTiles.push([r,c]);
+  }
+
+  function slide(row: number[]): number[] {
+    let arr = row.filter(v=>v);
+    for (let i=0;i<arr.length-1;i++) {
+      if (arr[i]===arr[i+1]) { arr[i]*=2; score+=arr[i]; arr.splice(i+1,1); }
+    }
+    while (arr.length<size) arr.push(0);
+    return arr;
+  }
+
+  function move(dir: string): boolean {
+    const old = board.map(r=>[...r]); mergedTiles = [];
+    for (let i=0;i<size;i++) {
+      let row: number[];
+      if (dir==='left') row = slide(board[i]);
+      else if (dir==='right') row = slide([...board[i]].reverse()).reverse();
+      else if (dir==='up') row = slide(board.map(r=>r[i]));
+      else row = slide(board.map(r=>r[i]).reverse()).reverse();
+      if (dir==='left'||dir==='right') board[i] = row;
+      else for (let j=0;j<size;j++) board[j][i] = row[j];
+    }
+    // Track merged tiles
+    for (let r=0;r<size;r++) for (let c=0;c<size;c++) {
+      if (board[r][c] && board[r][c]!==old[r][c] && !newTiles.some(([nr,nc])=>nr===r&&nc===c)) mergedTiles.push([r,c]);
+    }
+    let moved = false;
+    for (let r=0;r<size;r++) for (let c=0;c<size;c++) if (board[r][c]!==old[r][c]) moved = true;
+    return moved;
+  }
+
+  function render(): void {
+    boardEl.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    boardEl.innerHTML = '';
+    for (let r=0;r<size;r++) {
+      for (let c=0;c<size;c++) {
+        const cell = document.createElement('div');
+        cell.className = 'g2048-cell';
+        const v = board[r][c];
+        if (v) {
+          cell.textContent = String(v);
+          cell.classList.add(`t${v}`);
+          if (newTiles.some(([nr,nc])=>nr===r&&nc===c)) cell.classList.add('new');
+          if (mergedTiles.some(([nr,nc])=>nr===r&&nc===c)) cell.classList.add('merged');
+        }
+        boardEl.appendChild(cell);
+      }
+    }
+    newTiles = []; mergedTiles = [];
+    scoreEl.textContent = String(score);
+    if (score>best) { best=score; localStorage.setItem('g2048-best',String(best)); }
+    bestEl.textContent = String(best);
+  }
+
+  function checkOver(): boolean {
+    if (empty().length) return false;
+    for (let r=0;r<size;r++) for (let c=0;c<size;c++) {
+      if (c<size-1&&board[r][c]===board[r][c+1]) return false;
+      if (r<size-1&&board[r][c]===board[r+1][c]) return false;
+    }
+    return true;
+  }
+
+  function handle(dir: string): void {
+    if (over) return;
+    if (!move(dir)) return;
+    spawn(); render();
+    if (checkOver()) { over=true; saveScore('2048',score); (window as any).__gameFeedback?.({type:score>=2048?'win':'lose',title:score>=2048?'2048!':'Game Over',score:`${score}`,detail:`Best: ${best} · ${size}×${size}`}); }
+  }
+
+  function init(): void {
+    size = DIFF[diff]; board = Array.from({length:size},()=>Array(size).fill(0));
+    score = 0; over = false; newTiles = []; mergedTiles = [];
+    spawn(); spawn(); render();
+  }
+
+  document.addEventListener('keydown',e=>{const m:Record<string,string>={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};if(m[e.key]){e.preventDefault();handle(m[e.key])}});
+  let tx=0,ty=0;boardEl.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY});boardEl.addEventListener('touchend',e=>{const dx=(e.changedTouches[0]?.clientX||0)-tx,dy=(e.changedTouches[0]?.clientY||0)-ty;if(Math.abs(dx)>Math.abs(dy))handle(dx>0?'right':'left');else handle(dy>0?'down':'up')});
+  document.querySelectorAll('.g2-diff-btn').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.g2-diff-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');diff=(b as HTMLElement).dataset.diff as keyof typeof DIFF;init()})});
+  document.getElementById('g2048-restart')!.addEventListener('click',init);init();
+</script>
+
+<style is:global>
+  #game-2048 .g2048-header { display: flex; gap: var(--space-4); justify-content: center; margin-bottom: var(--space-4); }
+  #game-2048 .g2048-score-box { background: var(--bg-tertiary); border-radius: var(--radius-md); padding: var(--space-2) var(--space-6); text-align: center; min-width: 100px; }
+  #game-2048 .g2048-score-label { display: block; font-size: .7rem; color: var(--text-muted); text-transform: uppercase; }
+  #game-2048 .g2048-score-value { display: block; font-family: var(--font-mono); font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
+  #game-2048 .g2048-board { display: grid; gap: 10px; max-width: 440px; margin: 0 auto; background: var(--bg-tertiary); border-radius: var(--radius-lg); padding: 10px; }
+  #game-2048 .g2048-cell { aspect-ratio: 1; border-radius: var(--radius-md); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; transition: all .15s; }
+  #game-2048 .g2048-cell.new { animation: g2-new .2s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes g2-new { 0%{transform:scale(0);opacity:0} 100%{transform:scale(1);opacity:1} }
+  #game-2048 .g2048-cell.merged { animation: g2-merge .2s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes g2-merge { 0%{transform:scale(1)} 50%{transform:scale(1.2)} 100%{transform:scale(1)} }
+
+  #game-2048 .g2048-cell.t2{background:#eee4da;color:#776e65} #game-2048 .g2048-cell.t4{background:#ede0c8;color:#776e65}
+  #game-2048 .g2048-cell.t8{background:#f2b179;color:#fff} #game-2048 .g2048-cell.t16{background:#f59563;color:#fff}
+  #game-2048 .g2048-cell.t32{background:#f67c5f;color:#fff} #game-2048 .g2048-cell.t64{background:#f65e3b;color:#fff}
+  #game-2048 .g2048-cell.t128{background:#edcf72;color:#fff;font-size:1.5rem} #game-2048 .g2048-cell.t256{background:#edcc61;color:#fff;font-size:1.5rem}
+  #game-2048 .g2048-cell.t512{background:#edc850;color:#fff;font-size:1.5rem} #game-2048 .g2048-cell.t1024{background:#edc53f;color:#fff;font-size:1.2rem}
+  #game-2048 .g2048-cell.t2048{background:#edc22e;color:#fff;font-size:1.2rem;box-shadow:0 0 20px rgba(237,194,46,.5)}
+  #game-2048 .g2048-cell.t4096{background:#3c3a32;color:#fff;font-size:1rem;box-shadow:0 0 24px rgba(60,58,50,.5)}
+  #game-2048 .g2048-cell.t8192{background:#2c3e50;color:#fff;font-size:1rem;box-shadow:0 0 28px rgba(44,62,80,.5)}
+
+  #game-2048 .g2048-actions { text-align: center; margin-top: var(--space-4); }
+  #game-2048 .g2048-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #game-2048 .g2-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #game-2048 .g2-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  #game-2048 .g2048-hint { text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-2); }
+  @media (max-width: 480px) { #game-2048 .g2048-board { gap: 6px; padding: 6px; } #game-2048 .g2048-cell { font-size: 1.3rem; } }
+</style>

@@ -1,0 +1,132 @@
+---
+// MentalRotation — spatial reasoning with difficulty
+---
+
+<div class="game-container" id="mental-rotation-game">
+  <div class="mr-display">
+    <div class="mr-shapes">
+      <div class="mr-shape" id="mr-shape-a"><div class="mr-cube" id="mr-cube-a"></div></div>
+      <div class="mr-vs">VS</div>
+      <div class="mr-shape" id="mr-shape-b"><div class="mr-cube" id="mr-cube-b"></div></div>
+    </div>
+    <div class="mr-question">Are these the same shape?</div>
+    <div class="mr-feedback" id="mr-feedback"></div>
+  </div>
+
+  <div class="mr-buttons">
+    <button class="game-btn game-btn--primary" id="mr-same-btn">SAME</button>
+    <button class="game-btn game-btn--secondary" id="mr-diff-btn">DIFFERENT</button>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="mr-score-display">0</span><span class="stat-label">Score</span></div>
+    <div class="stat"><span class="stat-value" id="mr-round-display">1/10</span><span class="stat-label">Round</span></div>
+    <div class="stat"><span class="stat-value" id="mr-accuracy-display">0%</span><span class="stat-label">Accuracy</span></div>
+  </div>
+
+  <div class="mr-actions">
+    <div class="mr-difficulty"><button class="game-btn game-btn--secondary mr-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary mr-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary mr-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="mr-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = { easy: { total: 10, shapes: 4, pts: 10 }, medium: { total: 15, shapes: 6, pts: 15 }, hard: { total: 20, shapes: 8, pts: 20 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  const SHAPES = ['▲','■','◆','⬟','⬢','★','⬠','⬡'];
+
+  let round = 1, score = 0, correct = 0, isSame = false;
+  let over = false;
+
+  const cubeA = document.getElementById('mr-cube-a')!, cubeB = document.getElementById('mr-cube-b')!;
+  const fbEl = document.getElementById('mr-feedback')!;
+  const sEl = document.getElementById('mr-score-display')!, rEl = document.getElementById('mr-round-display')!, aEl = document.getElementById('mr-accuracy-display')!;
+
+  function gen(): void {
+    const pool = SHAPES.slice(0, cfg.shapes);
+    const base = pool[Math.floor(Math.random() * pool.length)];
+    const rotA = [0,45,90,135,180,225,270,315][Math.floor(Math.random() * 8)];
+    isSame = Math.random() < 0.5;
+
+    cubeA.textContent = base;
+    cubeA.style.transform = `rotate(${rotA}deg)`;
+
+    if (isSame) {
+      cubeB.textContent = base;
+      cubeB.style.transform = `rotate(${[0,45,90,135,180,225,270,315][Math.floor(Math.random() * 8)]}deg)`;
+    } else {
+      const diff = pool.filter(s => s !== base)[Math.floor(Math.random() * (pool.length - 1))];
+      cubeB.textContent = diff;
+      cubeB.style.transform = `rotate(${[0,45,90,135,180,225,270,315][Math.floor(Math.random() * 8)]}deg)`;
+    }
+
+    [cubeA, cubeB].forEach(c => { c.classList.remove('mr-pop'); void (c as HTMLElement).offsetWidth; c.classList.add('mr-pop'); });
+  }
+
+  function answer(same: boolean): void {
+    if (over || round > cfg.total) return;
+    if (same === isSame) { correct++; score += cfg.pts; fbEl.textContent = '✓'; fbEl.className = 'mr-feedback mr-ok'; }
+    else { fbEl.textContent = '✗'; fbEl.className = 'mr-feedback mr-err'; }
+    setTimeout(() => { fbEl.className = 'mr-feedback'; }, 500);
+    round++;
+    update();
+    if (round > cfg.total) finish();
+    else gen();
+  }
+
+  function update(): void {
+    sEl.textContent = String(score);
+    rEl.textContent = `${Math.min(round, cfg.total)}/${cfg.total}`;
+    aEl.textContent = round > 1 ? `${Math.round((correct / Math.min(round - 1, cfg.total)) * 100)}%` : '0%';
+  }
+
+  function finish(): void {
+    over = true;
+    saveScore('mental-rotation', score);
+    const acc = Math.round((correct / cfg.total) * 100);
+    (window as any).__gameFeedback?.({ type: acc >= 70 ? 'win' : 'lose', title: acc >= 70 ? 'Spatial Master!' : 'Good Effort!', score: `${score} pts`, detail: `${acc}% accuracy · ${diff}` });
+  }
+
+  function init(): void {
+    cfg = DIFF[diff]; round = 1; score = 0; correct = 0; over = false;
+    fbEl.textContent = ''; fbEl.className = 'mr-feedback';
+    update(); gen();
+  }
+
+  document.getElementById('mr-same-btn')!.addEventListener('click', () => answer(true));
+  document.getElementById('mr-diff-btn')!.addEventListener('click', () => answer(false));
+  document.querySelectorAll('.mr-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.mr-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('mr-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #mental-rotation-game .mr-display { text-align: center; }
+  #mental-rotation-game .mr-shapes { display: flex; align-items: center; justify-content: center; gap: var(--space-8); margin-bottom: var(--space-4); }
+  #mental-rotation-game .mr-shape { width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; background: var(--bg-tertiary); border-radius: var(--radius-lg); border: 2px solid var(--border-subtle); }
+  #mental-rotation-game .mr-cube { font-size: 5rem; transition: transform .5s; display: flex; align-items: center; justify-content: center; }
+  #mental-rotation-game .mr-cube.mr-pop { animation: mr-pop .3s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes mr-pop { 0%{transform:scale(.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+  #mental-rotation-game .mr-vs { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; color: var(--text-muted); }
+  #mental-rotation-game .mr-question { font-size: var(--text-lg); color: var(--text-secondary); margin-bottom: var(--space-2); }
+  #mental-rotation-game .mr-feedback { font-size: var(--text-lg); font-weight: 600; min-height: 28px; margin-bottom: var(--space-4); }
+  #mental-rotation-game .mr-feedback.mr-ok { color: var(--accent-green); animation: mr-fb-pop .3s ease; }
+  #mental-rotation-game .mr-feedback.mr-err { color: var(--accent-red); animation: mr-fb-pop .3s ease; }
+  @keyframes mr-fb-pop { 0%{transform:scale(.5)} 100%{transform:scale(1)} }
+  #mental-rotation-game .mr-buttons { display: flex; gap: var(--space-4); justify-content: center; }
+  #mental-rotation-game .mr-buttons .game-btn { min-width: 140px; }
+  #mental-rotation-game .mr-actions { text-align: center; margin-top: var(--space-6); }
+  #mental-rotation-game .mr-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #mental-rotation-game .mr-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #mental-rotation-game .mr-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  @media (max-width: 480px) { #mental-rotation-game .mr-shape { width: 100px; height: 100px; } #mental-rotation-game .mr-cube { font-size: 3.5rem; } }
+</style>

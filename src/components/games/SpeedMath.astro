@@ -1,0 +1,185 @@
+---
+// SpeedMath — rapid arithmetic with difficulty
+---
+
+<div class="game-container" id="speed-math-game">
+  <div class="sm-display">
+    <div class="sm-problem" id="sm-problem">3 + 7 = ?</div>
+    <div class="sm-feedback" id="sm-feedback"></div>
+    <div class="sm-input-area">
+      <input type="text" inputmode="numeric" id="sm-input" class="sm-input" placeholder="?" autocomplete="off" />
+      <button class="game-btn game-btn--primary" id="sm-submit-btn">Submit</button>
+    </div>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="sm-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="sm-combo-display">0x</span>
+      <span class="stat-label">Combo</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="sm-time-display">60s</span>
+      <span class="stat-label">Time</span>
+    </div>
+  </div>
+
+  <div class="sm-actions">
+    <div class="sm-difficulty">
+      <button class="game-btn game-btn--secondary sm-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary sm-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary sm-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="sm-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = { easy: { time: 60, ops: ['+','-'], pts: 10 }, medium: { time: 45, ops: ['+','-','×'], pts: 15 }, hard: { time: 30, ops: ['+','-','×','÷'], pts: 20 } };
+
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let score = 0, combo = 0, maxCombo = 0, timeLeft = cfg.time;
+  let answer = 0;
+  let running = false;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const problemEl = document.getElementById('sm-problem')!;
+  const fbEl = document.getElementById('sm-feedback')!;
+  const inputEl = document.getElementById('sm-input') as HTMLInputElement;
+  const scoreEl = document.getElementById('sm-score-display')!;
+  const comboEl = document.getElementById('sm-combo-display')!;
+  const timeEl = document.getElementById('sm-time-display')!;
+
+  function gen(): void {
+    const op = cfg.ops[Math.floor(Math.random() * cfg.ops.length)];
+    const diff = 1 + Math.floor(score / 50);
+    let a: number, b: number;
+    switch (op) {
+      case '+': a = Math.floor(Math.random() * 30 * diff) + 5; b = Math.floor(Math.random() * 30 * diff) + 5; answer = a + b; break;
+      case '-': a = Math.floor(Math.random() * 50 * diff) + 20; b = Math.floor(Math.random() * (a - 1)) + 1; answer = a - b; break;
+      case '×': a = Math.floor(Math.random() * 12 * diff) + 2; b = Math.floor(Math.random() * 12) + 2; answer = a * b; break;
+      case '÷': b = Math.floor(Math.random() * 12) + 2; answer = Math.floor(Math.random() * 12) + 1; a = answer * b; break;
+    }
+    problemEl.textContent = `${a} ${op} ${b} = ?`;
+  }
+
+  function check(): void {
+    if (!running) return;
+    const val = parseInt(inputEl.value, 10);
+    if (isNaN(val) || inputEl.value.trim() === '') return;
+
+    if (val === answer) {
+      combo++; maxCombo = Math.max(maxCombo, combo);
+      score += cfg.pts + combo * 3;
+      fbEl.textContent = '✓';
+      fbEl.className = 'sm-feedback sm-ok';
+      // Bonus time at milestones
+      if (score % 200 < cfg.pts + combo * 3) timeLeft += 5;
+    } else {
+      combo = 0;
+      fbEl.textContent = `✗ ${answer}`;
+      fbEl.className = 'sm-feedback sm-err';
+      problemEl.classList.add('sm-shake');
+      setTimeout(() => problemEl.classList.remove('sm-shake'), 300);
+    }
+    setTimeout(() => { fbEl.className = 'sm-feedback'; }, 500);
+    inputEl.value = ''; update(); gen(); inputEl.focus();
+  }
+
+  function update(): void {
+    scoreEl.textContent = String(score);
+    comboEl.textContent = `${combo}x`;
+    timeEl.textContent = `${timeLeft}s`;
+  }
+
+  function start(): void {
+    score = 0; combo = 0; maxCombo = 0; timeLeft = cfg.time; running = true;
+    inputEl.disabled = false; update(); gen(); inputEl.focus();
+    timer = setInterval(() => {
+      timeLeft--; timeEl.textContent = `${timeLeft}s`;
+      if (timeLeft <= 0) end();
+    }, 1000);
+  }
+
+  function end(): void {
+    running = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    inputEl.disabled = true;
+    saveScore('speed-math', score);
+    problemEl.textContent = `Done! Score: ${score} · Max Combo: ${maxCombo}x`;
+    fbEl.textContent = '';
+    (window as any).__gameFeedback?.({
+      type: score >= 200 ? 'win' : 'lose',
+      title: score >= 200 ? 'Math Wizard!' : 'Time\'s Up!',
+      score: `${score} pts`,
+      detail: `${difficulty} · Max combo: ${maxCombo}x`,
+    });
+  }
+
+  function init(): void {
+    if (timer) { clearInterval(timer); timer = null; }
+    cfg = DIFF[difficulty];
+    timeLeft = cfg.time;
+    running = false;
+    inputEl.disabled = false;
+    fbEl.textContent = '';
+    problemEl.textContent = 'Ready?';
+    timeEl.textContent = `${cfg.time}s`;
+    scoreEl.textContent = '0';
+    comboEl.textContent = '0x';
+    start();
+  }
+
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  document.getElementById('sm-submit-btn')!.addEventListener('click', check);
+
+  document.querySelectorAll('.sm-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.sm-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('sm-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #speed-math-game .sm-display { text-align: center; }
+  #speed-math-game .sm-problem {
+    font-family: var(--font-mono); font-size: 3rem; font-weight: 700;
+    margin-bottom: var(--space-2); transition: color 0.2s;
+  }
+  #speed-math-game .sm-problem.sm-shake { animation: sm-shake 0.3s ease; }
+  @keyframes sm-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+  #speed-math-game .sm-feedback {
+    font-size: var(--text-lg); font-weight: 600; min-height: 28px; margin-bottom: var(--space-4);
+  }
+  #speed-math-game .sm-feedback.sm-ok { color: var(--accent-green); animation: sm-pop 0.2s ease; }
+  #speed-math-game .sm-feedback.sm-err { color: var(--accent-red); animation: sm-pop 0.2s ease; }
+  @keyframes sm-pop { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+
+  #speed-math-game .sm-input-area { display: flex; gap: var(--space-3); justify-content: center; align-items: center; }
+  #speed-math-game .sm-input {
+    width: 160px; background: var(--bg-tertiary); border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+    font-family: var(--font-mono); font-size: 1.5rem; color: var(--text-primary);
+    text-align: center; outline: none;
+  }
+  #speed-math-game .sm-input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,229,255,0.15); }
+
+  #speed-math-game .sm-actions { text-align: center; margin-top: var(--space-6); }
+  #speed-math-game .sm-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #speed-math-game .sm-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #speed-math-game .sm-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+
+  @media (max-width: 768px) { #speed-math-game .sm-problem { font-size: 2rem; } }
+</style>

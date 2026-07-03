@@ -1,0 +1,126 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/layout/Header.astro';
+import Footer from '../components/layout/Footer.astro';
+
+const pageTitle = 'Privacy Policy';
+const pageDescription = 'Brain Games Hub Privacy Policy — Learn how we handle your data, what information we collect, and your privacy rights.';
+---
+
+<BaseLayout title={pageTitle} description={pageDescription}>
+  <Header />
+
+  <main class="container">
+    <section class="page-hero">
+      <h1>Privacy Policy</h1>
+      <p class="lead">Last updated: June 28, 2026</p>
+    </section>
+
+    <section class="content-section">
+      <h2>1. Introduction</h2>
+      <p>
+        Welcome to Brain Games Hub. We respect your privacy and are committed to protecting
+        your personal data. This privacy policy explains how we handle information
+        when you visit our website.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>2. Information We Collect</h2>
+      <h3>2.1 Local Storage</h3>
+      <p>
+        All game scores and performance data are stored locally on your device using
+        your browser's localStorage. This data never leaves your device and is not
+        transmitted to our servers.
+      </p>
+      <h3>2.2 Cookies</h3>
+      <p>
+        We use cookies and similar technologies for the following purposes:
+      </p>
+      <ul>
+        <li>Essential cookies: Required for the website to function properly</li>
+        <li>Analytics cookies: To understand how visitors use our site (if enabled)</li>
+        <li>Advertising cookies: Used by Google AdSense to serve personalized ads</li>
+      </ul>
+      <h3>2.3 Third-Party Services</h3>
+      <p>
+        We use Google AdSense to display advertisements. Google may use cookies to
+        serve ads based on your prior visits to our website or other websites.
+        Google's use of advertising cookies enables it and its partners to serve
+        ads based on your visit to our site and/or other sites on the Internet.
+      </p>
+      <p>
+        You may opt out of personalized advertising by visiting
+        <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer">Google Ads Settings</a>.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>3. How We Use Your Information</h2>
+      <p>
+        We do not collect, store, or process any personal data on our servers.
+        Game scores are stored exclusively in your browser's local storage.
+        You can delete this data at any time by clearing your browser's cache
+        and local storage.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>4. Your Rights</h2>
+      <p>Depending on your location, you may have the following rights:</p>
+      <ul>
+        <li>The right to access your personal data</li>
+        <li>The right to delete your data</li>
+        <li>The right to opt out of personalized advertising</li>
+        <li>The right to lodge a complaint with a supervisory authority</li>
+      </ul>
+      <p>
+        Since all game data is stored locally on your device, you can exercise
+        your right to delete data by clearing your browser's local storage at any time.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>5. Children's Privacy</h2>
+      <p>
+        Our website is not directed to children under the age of 13. We do not
+        knowingly collect personal information from children under 13. If you are
+        a parent or guardian and believe your child has provided us with personal
+        information, please contact us.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>6. Contact</h2>
+      <p>
+        If you have any questions about this Privacy Policy, please contact us at
+        <a href="mailto:miraclehuang611@gmail.com">miraclehuang611@gmail.com</a>.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .page-hero {
+    text-align: center;
+    padding: var(--space-16) 0 var(--space-8);
+  }
+
+  .page-hero h1 {
+    font-size: var(--text-4xl);
+    margin-bottom: var(--space-4);
+  }
+
+  .lead {
+    font-size: var(--text-xl);
+    color: var(--text-secondary);
+  }
+
+  .content-section h3 {
+    font-size: var(--text-xl);
+    margin-bottom: var(--space-2);
+    margin-top: var(--space-4);
+  }
+</style>

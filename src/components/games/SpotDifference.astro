@@ -1,0 +1,96 @@
+---
+// SpotDifference — find the odd emoji
+---
+
+<div class="game-container" id="spotdiff-game">
+  <div class="sd-grid" id="sd-grid"></div>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="sd-score">0</span><span class="stat-label">Score</span></div>
+    <div class="stat"><span class="stat-value" id="sd-round">1/10</span><span class="stat-label">Round</span></div>
+    <div class="stat"><span class="stat-value" id="sd-time">0s</span><span class="stat-label">Time</span></div>
+  </div>
+  <div class="sd-actions">
+    <div class="sd-difficulty"><button class="game-btn game-btn--secondary sd-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary sd-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary sd-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="sd-restart">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const PAIRS = [
+    ['😀','😃'],['🙂','😊'],['😎','🕶️'],['🤔','🤨'],['😴','😪'],['🤩','😍'],['😱','😨'],['😤','😠'],['🥳','🎉'],['🧐','🤓'],
+    ['😇','😈'],['🤯','💥'],['🥺','😢'],['🫠','😶‍🌫️'],['😬','😁'],['🥱','😮'],['🤐','😶'],['🫡','😐'],['🥴','😵'],['🤕','😷'],
+    ['🍎','🍏'],['🍊','🍋'],['🍇','🍓'],['🌽','🍌'],['🥕','🌶️'],['🧅','🧄'],['🥑','🥝'],['🍑','🍒'],
+    ['🐶','🐱'],['🐭','🐹'],['🐰','🐻'],['🐼','🐨'],['🐯','🦁'],['🐮','🐷'],['🐸','🐵'],
+  ];
+
+  const DIFF = { easy: { total: 10, minSize: 4, maxSize: 5, pts: 10 }, medium: { total: 15, minSize: 4, maxSize: 6, pts: 15 }, hard: { total: 20, minSize: 5, maxSize: 7, pts: 20 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  let round = 1, score = 0, correct = 0, oddIdx = 0;
+  let timer: ReturnType<typeof setInterval>|null = null;
+  let startTime = 0;
+
+  const gridEl = document.getElementById('sd-grid')!, sEl = document.getElementById('sd-score')!;
+  const rEl = document.getElementById('sd-round')!, tEl = document.getElementById('sd-time')!;
+
+  function render(): void {
+    if (round > cfg.total) { finish(); return; }
+    const pair = PAIRS[Math.floor(Math.random() * PAIRS.length)];
+    const progress = (round - 1) / cfg.total;
+    const size = Math.floor(cfg.minSize + progress * (cfg.maxSize - cfg.minSize));
+    const total = size * size;
+    oddIdx = Math.floor(Math.random() * total);
+
+    gridEl.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    gridEl.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'sd-cell';
+      cell.textContent = i === oddIdx ? pair[1] : pair[0];
+      cell.addEventListener('click', () => click(i, cell));
+      gridEl.appendChild(cell);
+    }
+  }
+
+  function click(i: number, el: HTMLElement): void {
+    if (!startTime) { startTime = Date.now(); timer = setInterval(() => { tEl.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`; }, 200); }
+    if (i === oddIdx) { correct++; score += cfg.pts + Math.floor((Date.now() - startTime) / 1000) * 2; el.classList.add('correct'); }
+    else { el.classList.add('wrong'); setTimeout(() => el.classList.remove('wrong'), 400); return; }
+    round++; update(); setTimeout(render, 500);
+  }
+
+  function update(): void { sEl.textContent = String(score); rEl.textContent = `${Math.min(round, cfg.total)}/${cfg.total}`; }
+
+  function finish(): void {
+    if (timer) clearInterval(timer);
+    saveScore('spot-difference', score);
+    gridEl.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:2rem;font-size:1.5rem;color:var(--accent-green);">Complete!</div>';
+    (window as any).__gameFeedback?.({ type: 'win', title: 'Sharp Eyes!', score: `${score}`, detail: `${correct}/${cfg.total} · ${diff}` });
+  }
+
+  function init(): void {
+    cfg = DIFF[diff]; round = 1; score = 0; correct = 0; startTime = 0;
+    if (timer) { clearInterval(timer); timer = null; }
+    tEl.textContent = '0s'; rEl.textContent = `1/${cfg.total}`;
+    update(); render();
+  }
+
+  document.querySelectorAll('.sd-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.sd-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('sd-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #spotdiff-game .sd-grid { display: grid; gap: 8px; max-width: 460px; margin: 0 auto; }
+  #spotdiff-game .sd-cell { aspect-ratio: 1; background: var(--bg-tertiary); border: 2px solid var(--border-subtle); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 2rem; cursor: pointer; transition: all .15s; }
+  #spotdiff-game .sd-cell:hover { border-color: var(--accent-cyan); transform: scale(1.06); box-shadow: 0 0 12px rgba(0,229,255,.2); }
+  #spotdiff-game .sd-cell.correct { border-color: var(--accent-green); background: rgba(0,230,118,.12); animation: sd-pop .5s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes sd-pop { 0%{transform:scale(1)} 40%{transform:scale(1.25)} 70%{transform:scale(.9)} 100%{transform:scale(1)} }
+  #spotdiff-game .sd-cell.wrong { border-color: var(--accent-red); background: rgba(255,82,82,.1); animation: sd-shake .4s ease; }
+  @keyframes sd-shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+  #spotdiff-game .sd-actions { text-align: center; margin-top: var(--space-4); }
+  #spotdiff-game .sd-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #spotdiff-game .sd-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #spotdiff-game .sd-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

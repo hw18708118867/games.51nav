@@ -1,0 +1,333 @@
+---
+// GameShell — Gaming-themed container with animated borders, scanlines, and decorative elements
+interface Props {
+  heroColor?: string;
+  category?: string;
+}
+const { heroColor = '#00E5FF', category = 'speed' } = Astro.props;
+---
+
+<div
+  class="game-shell"
+  id="game-shell"
+  style={`--shell-color: ${heroColor}`}
+  data-category={category}
+>
+  <!-- Decorative overlay (clipped to rounded corners) -->
+  <div class="game-shell-decor" aria-hidden="true">
+    <div class="game-shell-scanlines"></div>
+    <div class="game-shell-corners">
+      <span class="shell-corner shell-corner--tl"></span>
+      <span class="shell-corner shell-corner--tr"></span>
+      <span class="shell-corner shell-corner--bl"></span>
+      <span class="shell-corner shell-corner--br"></span>
+    </div>
+  </div>
+
+  <!-- Animated border glow ring -->
+  <div class="game-shell-border" aria-hidden="true"></div>
+
+  <!-- Inner content -->
+  <div class="game-shell-inner">
+    <slot />
+  </div>
+
+  <!-- Feedback overlay (shown on game over/win) -->
+  <div class="game-shell-feedback" id="game-feedback" aria-live="polite" hidden>
+    <div class="feedback-content">
+      <div class="feedback-icon" id="feedback-icon"></div>
+      <div class="feedback-title" id="feedback-title"></div>
+      <div class="feedback-score" id="feedback-score"></div>
+      <div class="feedback-detail" id="feedback-detail"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Expose a global API for game components to trigger feedback
+  interface FeedbackOptions {
+    type: 'win' | 'lose' | 'levelup';
+    title?: string;
+    score?: string | number;
+    detail?: string;
+  }
+
+  function showFeedback(opts: FeedbackOptions) {
+    const el = document.getElementById('game-feedback');
+    if (!el) return;
+
+    const iconMap: Record<string, string> = {
+      win: '🎉',
+      lose: '💥',
+      levelup: '⚡',
+    };
+
+    const titleMap: Record<string, string> = {
+      win: opts.title || 'Victory!',
+      lose: opts.title || 'Game Over',
+      levelup: opts.title || 'Level Up!',
+    };
+
+    const iconEl = document.getElementById('feedback-icon');
+    const titleEl = document.getElementById('feedback-title');
+    const scoreEl = document.getElementById('feedback-score');
+    const detailEl = document.getElementById('feedback-detail');
+
+    if (iconEl) iconEl.textContent = iconMap[opts.type] || iconMap.lose;
+    if (titleEl) titleEl.textContent = titleMap[opts.type] || '';
+    if (scoreEl && opts.score !== undefined) {
+      scoreEl.textContent = String(opts.score);
+      scoreEl.style.display = '';
+    } else if (scoreEl) {
+      scoreEl.style.display = 'none';
+    }
+    if (detailEl && opts.detail) {
+      detailEl.textContent = opts.detail;
+      detailEl.style.display = '';
+    } else if (detailEl) {
+      detailEl.style.display = 'none';
+    }
+
+    el.setAttribute('data-type', opts.type);
+    el.hidden = false;
+    el.classList.remove('feedback-exit');
+    el.classList.add('feedback-enter');
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      el.classList.remove('feedback-enter');
+      el.classList.add('feedback-exit');
+      setTimeout(() => { el.hidden = true; }, 500);
+    }, 3000);
+
+    // Click to dismiss
+    el.onclick = () => {
+      el.classList.remove('feedback-enter');
+      el.classList.add('feedback-exit');
+      setTimeout(() => { el.hidden = true; }, 500);
+    };
+  }
+
+  // Expose globally
+  (window as any).__gameFeedback = showFeedback;
+</script>
+
+<style>
+  .game-shell {
+    position: relative;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    margin: var(--space-8) 0;
+    isolation: isolate;
+  }
+
+  /* ── Decorative overlay (clipped to rounded corners) ── */
+  .game-shell-decor {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* ── Scanlines ── */
+  .game-shell-scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.008) 2px,
+      rgba(255, 255, 255, 0.008) 4px
+    );
+  }
+
+  /* ── Corner decorations ── */
+  .game-shell-corners {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .shell-corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: var(--shell-color, var(--accent-cyan));
+    opacity: 0.6;
+    transition: opacity 0.3s;
+  }
+
+  .shell-corner--tl { top: 6px; left: 6px; border-top: 2px solid; border-left: 2px solid; }
+  .shell-corner--tr { top: 6px; right: 6px; border-top: 2px solid; border-right: 2px solid; }
+  .shell-corner--bl { bottom: 6px; left: 6px; border-bottom: 2px solid; border-left: 2px solid; }
+  .shell-corner--br { bottom: 6px; right: 6px; border-bottom: 2px solid; border-right: 2px solid; }
+
+  .game-shell:hover .shell-corner {
+    opacity: 1;
+  }
+
+  /* ── Animated border glow ── */
+  .game-shell-border {
+    position: absolute;
+    inset: -1px;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    border: 2px solid transparent;
+    background: linear-gradient(
+      135deg,
+      var(--shell-color, var(--accent-cyan)),
+      transparent 40%,
+      transparent 60%,
+      var(--shell-color, var(--accent-cyan))
+    ) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.25;
+    animation: shell-border-pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes shell-border-pulse {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Inner content ── */
+  .game-shell-inner {
+    position: relative;
+    z-index: 3;
+    padding: var(--space-8);
+  }
+
+  /* ── Feedback overlay ── */
+  .game-shell-feedback {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 15, 0.92);
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+  }
+
+  .game-shell-feedback[hidden] { display: none; }
+
+  .feedback-content {
+    text-align: center;
+    animation: feedback-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .feedback-enter .feedback-content {
+    animation: feedback-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .feedback-exit .feedback-content {
+    animation: feedback-pop-out 0.4s ease forwards;
+  }
+
+  @keyframes feedback-pop {
+    from { transform: scale(0.3); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes feedback-pop-out {
+    from { transform: scale(1); opacity: 1; }
+    to { transform: scale(0.5); opacity: 0; }
+  }
+
+  .feedback-icon {
+    font-size: 4rem;
+    animation: feedback-icon-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+  }
+
+  @keyframes feedback-icon-bounce {
+    from { transform: scale(0) rotate(-20deg); }
+    to { transform: scale(1) rotate(0deg); }
+  }
+
+  .feedback-title {
+    font-family: var(--font-display);
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: var(--space-4) 0;
+    animation: feedback-title-in 0.5s ease 0.2s both;
+  }
+
+  @keyframes feedback-title-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .game-shell-feedback[data-type="win"] .feedback-title {
+    background: linear-gradient(135deg, #00E676, #00E5FF);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .game-shell-feedback[data-type="lose"] .feedback-title {
+    color: var(--accent-red);
+  }
+
+  .game-shell-feedback[data-type="levelup"] .feedback-title {
+    color: var(--accent-orange);
+  }
+
+  .feedback-score {
+    font-family: var(--font-mono);
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    animation: feedback-title-in 0.5s ease 0.3s both;
+  }
+
+  .feedback-detail {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-top: var(--space-2);
+    animation: feedback-title-in 0.5s ease 0.35s both;
+  }
+
+  /* ── Category-based backgrounds ── */
+  .game-shell[data-category="speed"] .game-shell-inner {
+    background: radial-gradient(ellipse at 50% 0%, rgba(0, 229, 255, 0.03) 0%, transparent 60%);
+  }
+
+  .game-shell[data-category="memory"] .game-shell-inner {
+    background: radial-gradient(ellipse at 50% 0%, rgba(124, 77, 255, 0.04) 0%, transparent 60%);
+  }
+
+  .game-shell[data-category="logic"] .game-shell-inner {
+    background:
+      radial-gradient(circle at 20% 50%, rgba(0, 229, 255, 0.02) 0%, transparent 40%),
+      radial-gradient(circle at 80% 50%, rgba(124, 77, 255, 0.02) 0%, transparent 40%);
+  }
+
+  .game-shell[data-category="word"] .game-shell-inner {
+    background: radial-gradient(ellipse at 50% 0%, rgba(0, 230, 118, 0.03) 0%, transparent 60%);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .game-shell-inner { padding: var(--space-4); }
+    .feedback-title { font-size: 1.8rem; }
+    .feedback-score { font-size: 2rem; }
+    .feedback-icon { font-size: 3rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .game-shell-border { animation: none !important; }
+    .game-shell-scanlines { display: none; }
+    .feedback-content { animation: none !important; }
+  }
+</style>

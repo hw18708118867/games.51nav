@@ -1,0 +1,42 @@
+---
+import { getAdClientId, getAdSlot, isAdEnabled } from '../../lib/ads';
+
+interface Props {
+  slot: 'topBanner' | 'inContent' | 'bottomBanner';
+  format?: 'auto' | 'horizontal' | 'rectangle';
+  className?: string;
+}
+
+const { slot, format = 'auto', className = '' } = Astro.props;
+const adEnabled = isAdEnabled();
+const clientId = getAdClientId();
+const adSlot = getAdSlot(slot);
+---
+
+<div class:list={['ad-container', className]}>
+  {adEnabled ? (
+    <ins
+      class="adsbygoogle"
+      style="display:block"
+      data-ad-client={clientId}
+      data-ad-slot={adSlot}
+      data-ad-format={format}
+      data-full-width-responsive="true"
+    ></ins>
+  ) : (
+    <div class="ad-placeholder">
+      <span>Ad Unit — {slot}</span>
+    </div>
+  )}
+</div>
+
+{adEnabled && (
+  <script>
+    // Load AdSense script once
+    try {
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      // AdSense not available
+    }
+  </script>
+)}

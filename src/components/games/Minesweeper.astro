@@ -1,0 +1,364 @@
+---
+// Minesweeper — with cell reveal, flag, and explosion animations
+---
+
+<div class="game-container" id="minesweeper-game">
+  <div class="ms-header">
+    <div class="ms-counter" id="ms-mine-count">010</div>
+    <button class="ms-face" id="ms-face-btn">😊</button>
+    <div class="ms-counter" id="ms-time-count">000</div>
+  </div>
+
+  <div class="ms-board" id="ms-board"></div>
+
+  <div class="ms-actions">
+    <button class="game-btn game-btn--secondary ms-lvl-btn active" data-lvl="easy">Easy (9×9)</button>
+    <button class="game-btn game-btn--secondary ms-lvl-btn" data-lvl="medium">Medium (16×16)</button>
+    <button class="game-btn game-btn--secondary ms-lvl-btn" data-lvl="hard">Expert (30×16)</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const LEVELS = {
+    easy:   { rows: 9,  cols: 9,  mines: 10 },
+    medium: { rows: 16, cols: 16, mines: 40 },
+    hard:   { rows: 16, cols: 30, mines: 99 },
+  };
+
+  let config = LEVELS.easy;
+  let grid: { mine: boolean; revealed: boolean; flagged: boolean; adjacent: number }[][] = [];
+  let cells: HTMLElement[][] = [];
+  let gameOver = false;
+  let gameWon = false;
+  let minesLeft = 0;
+  let timer = 0;
+  let timerId: ReturnType<typeof setInterval> | null = null;
+  let firstClick = true;
+
+  const board = document.getElementById('ms-board')!;
+  const faceBtn = document.getElementById('ms-face-btn')!;
+  const mineEl = document.getElementById('ms-mine-count')!;
+  const timeEl = document.getElementById('ms-time-count')!;
+
+  // ── Init ──
+  function initGrid(): void {
+    grid = Array.from({ length: config.rows }, () =>
+      Array.from({ length: config.cols }, () => ({ mine: false, revealed: false, flagged: false, adjacent: 0 }))
+    );
+    cells = [];
+    gameOver = false; gameWon = false; firstClick = true;
+    minesLeft = config.mines; timer = 0;
+    if (timerId) { clearInterval(timerId); timerId = null; }
+    updateDisplay();
+    renderBoard();
+    faceBtn.textContent = '😊';
+  }
+
+  function placeMines(sr: number, sc: number): void {
+    let n = 0;
+    while (n < config.mines) {
+      const r = Math.floor(Math.random() * config.rows);
+      const c = Math.floor(Math.random() * config.cols);
+      if (grid[r][c].mine) continue;
+      if (Math.abs(r - sr) <= 1 && Math.abs(c - sc) <= 1) continue;
+      grid[r][c].mine = true;
+      n++;
+    }
+    for (let r = 0; r < config.rows; r++)
+      for (let c = 0; c < config.cols; c++) {
+        if (grid[r][c].mine) continue;
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr++)
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols && grid[nr][nc].mine) count++;
+          }
+        grid[r][c].adjacent = count;
+      }
+  }
+
+  // ── Render ──
+  function renderBoard(): void {
+    const cellSize = config.cols > 20 ? 28 : config.cols > 12 ? 32 : 36;
+    board.style.gridTemplateColumns = `repeat(${config.cols}, ${cellSize}px)`;
+    board.innerHTML = '';
+    cells = [];
+    for (let r = 0; r < config.rows; r++) {
+      cells[r] = [];
+      for (let c = 0; c < config.cols; c++) {
+        const el = document.createElement('div');
+        el.className = 'ms-cell';
+        el.addEventListener('click', () => click(r, c));
+        el.addEventListener('contextmenu', (e) => { e.preventDefault(); flag(r, c); });
+        board.appendChild(el);
+        cells[r][c] = el;
+      }
+    }
+  }
+
+  // ── Update a single cell's DOM ──
+  function updateCell(r: number, c: number): void {
+    const cell = grid[r][c];
+    const el = cells[r][c];
+    el.className = 'ms-cell';
+    el.textContent = '';
+
+    if (cell.revealed) {
+      el.classList.add('revealed');
+      if (cell.mine) {
+        el.classList.add('mine');
+        el.textContent = '💣';
+      } else if (cell.adjacent > 0) {
+        el.textContent = String(cell.adjacent);
+        el.classList.add(`n${cell.adjacent}`);
+      }
+    } else if (cell.flagged) {
+      el.classList.add('flagged');
+      el.textContent = '🚩';
+    }
+  }
+
+  // ── Reveal with animation ──
+  function reveal(r: number, c: number): void {
+    if (r < 0 || r >= config.rows || c < 0 || c >= config.cols) return;
+    const cell = grid[r][c];
+    if (cell.revealed || cell.flagged || gameOver) return;
+
+    cell.revealed = true;
+    const el = cells[r][c];
+
+    if (cell.mine) {
+      // Explosion + board shake
+      board.classList.add('shake');
+      setTimeout(() => board.classList.remove('shake'), 500);
+      el.classList.add('mine', 'boom');
+      updateCell(r, c);
+      setTimeout(() => endGame(false), 400);
+      return;
+    }
+
+    // Reveal animation
+    el.classList.add('reveal-pop');
+    updateCell(r, c);
+    setTimeout(() => el.classList.remove('reveal-pop'), 300);
+
+    if (cell.adjacent === 0) {
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++)
+          reveal(r + dr, c + dc);
+    }
+    checkWin();
+  }
+
+  // ── Flag with animation ──
+  function flag(r: number, c: number): void {
+    if (gameOver) return;
+    const cell = grid[r][c];
+    if (cell.revealed) return;
+
+    cell.flagged = !cell.flagged;
+    minesLeft += cell.flagged ? -1 : 1;
+    updateDisplay();
+
+    const el = cells[r][c];
+    if (cell.flagged) el.classList.add('flag-pop');
+    updateCell(r, c);
+    setTimeout(() => el.classList.remove('flag-pop'), 400);
+  }
+
+  // ── Click ──
+  function click(r: number, c: number): void {
+    if (gameOver) return;
+    if (grid[r][c].flagged) return;
+    if (firstClick) {
+      firstClick = false;
+      placeMines(r, c);
+      timerId = setInterval(() => { timer++; updateDisplay(); }, 1000);
+    }
+    reveal(r, c);
+  }
+
+  // ── End game ──
+  function endGame(won: boolean): void {
+    gameOver = true; gameWon = won;
+    if (timerId) { clearInterval(timerId); timerId = null; }
+    faceBtn.textContent = won ? '😎' : '💀';
+
+    if (!won) {
+      // Reveal all mines with staggered explosion
+      const mines: [number, number][] = [];
+      for (let r = 0; r < config.rows; r++)
+        for (let c = 0; c < config.cols; c++)
+          if (grid[r][c].mine && !grid[r][c].revealed) mines.push([r, c]);
+
+      mines.forEach(([r, c], i) => {
+        setTimeout(() => {
+          grid[r][c].revealed = true;
+          cells[r][c].classList.add('mine', 'boom');
+          updateCell(r, c);
+        }, i * 60);
+      });
+    }
+
+    if (won) {
+      saveScore('minesweeper', Math.max(100, 1000 - timer));
+      (window as any).__gameFeedback?.({
+        type: 'win', title: 'Board Cleared!',
+        score: `${timer}s`, detail: `${config.mines} mines · ${config.rows}×${config.cols}`,
+      });
+    } else {
+      setTimeout(() => {
+        (window as any).__gameFeedback?.({
+          type: 'lose', title: 'Boom!',
+          score: 'Game Over', detail: 'Click the face to try again',
+        });
+      }, mines.length * 60 + 500);
+    }
+  }
+
+  function checkWin(): void {
+    for (let r = 0; r < config.rows; r++)
+      for (let c = 0; c < config.cols; c++)
+        if (!grid[r][c].revealed && !grid[r][c].mine) return;
+    endGame(true);
+  }
+
+  function updateDisplay(): void {
+    mineEl.textContent = String(Math.max(0, minesLeft)).padStart(3, '0');
+    timeEl.textContent = String(Math.min(999, timer)).padStart(3, '0');
+  }
+
+  function setLevel(lvl: string): void {
+    config = LEVELS[lvl as keyof typeof LEVELS] || LEVELS.easy;
+    document.querySelectorAll('.ms-lvl-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.ms-lvl-btn[data-lvl="${lvl}"]`)?.classList.add('active');
+    initGrid();
+  }
+
+  faceBtn.addEventListener('click', initGrid);
+  document.querySelectorAll('.ms-lvl-btn').forEach(btn => {
+    btn.addEventListener('click', () => setLevel((btn as HTMLElement).dataset.lvl!));
+  });
+  initGrid();
+</script>
+
+<style is:global>
+  #minesweeper-game .ms-header {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 520px; margin: 0 auto var(--space-4);
+    padding: var(--space-2) var(--space-4);
+    background: var(--bg-tertiary); border-radius: var(--radius-md);
+  }
+  #minesweeper-game .ms-counter {
+    font-family: var(--font-mono); font-size: 1.5rem; font-weight: 700;
+    color: var(--accent-red); min-width: 60px; text-align: center;
+  }
+  #minesweeper-game .ms-face {
+    font-size: 1.5rem; background: none; border: none;
+    cursor: pointer; padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm); transition: transform 0.2s;
+  }
+  #minesweeper-game .ms-face:hover { background: var(--bg-hover); transform: scale(1.15); }
+
+  #minesweeper-game .ms-board {
+    display: grid; gap: 1px; margin: 0 auto;
+    background: var(--border-medium); border: 2px solid var(--border-strong);
+    border-radius: var(--radius-sm); overflow: hidden; overflow-x: auto;
+    width: fit-content; max-width: 100%;
+  }
+
+  #minesweeper-game .ms-cell {
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(0.65rem, 1.5vw, 0.85rem); font-weight: 700;
+    cursor: pointer; user-select: none;
+    transition: background 0.15s;
+  }
+  #minesweeper-game .ms-cell:not(.revealed):not(.mine):hover {
+    background: var(--bg-hover);
+    box-shadow: inset 0 0 0 2px var(--accent-cyan);
+    z-index: 1;
+  }
+
+  /* ── Reveal animation ── */
+  #minesweeper-game .ms-cell.revealed { background: var(--bg-secondary); cursor: default; }
+  #minesweeper-game .ms-cell.reveal-pop {
+    animation: ms-reveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes ms-reveal {
+    0%   { transform: scale(0); opacity: 0; background: var(--accent-cyan); border-radius: 50%; }
+    40%  { transform: scale(1.3); opacity: 0.8; background: rgba(0,229,255,0.3); }
+    70%  { transform: scale(0.9); }
+    100% { transform: scale(1); opacity: 1; background: var(--bg-secondary); border-radius: 0; }
+  }
+
+  /* ── Flag animation ── */
+  #minesweeper-game .ms-cell.flagged { background: var(--bg-tertiary); }
+  #minesweeper-game .ms-cell.flag-pop {
+    animation: ms-flag 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes ms-flag {
+    0%   { transform: scale(0) rotate(-60deg); }
+    40%  { transform: scale(1.5) rotate(15deg); }
+    60%  { transform: scale(0.85) rotate(-5deg); }
+    80%  { transform: scale(1.1) rotate(3deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  /* ── Explosion ── */
+  #minesweeper-game .ms-cell.mine { background: var(--accent-red) !important; }
+  #minesweeper-game .ms-cell.boom {
+    animation: ms-boom 0.7s ease;
+  }
+  @keyframes ms-boom {
+    0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,82,82,0.8); }
+    25%  { transform: scale(2); background: #fff; box-shadow: 0 0 40px 20px rgba(255,82,82,0.8); z-index: 10; }
+    50%  { transform: scale(1.5); background: var(--accent-orange); box-shadow: 0 0 60px 30px rgba(255,145,0,0.6); }
+    75%  { transform: scale(0.6); background: var(--accent-red); }
+    100% { transform: scale(1); background: var(--accent-red); box-shadow: 0 0 0 0 rgba(255,82,82,0); }
+  }
+
+  /* ── Board shake on explosion ── */
+  #minesweeper-game .ms-board.shake {
+    animation: ms-shake 0.5s ease;
+  }
+  @keyframes ms-shake {
+    0%, 100% { transform: translate(0); }
+    10%  { transform: translate(-6px, 4px); }
+    20%  { transform: translate(6px, -4px); }
+    30%  { transform: translate(-4px, -2px); }
+    40%  { transform: translate(4px, 2px); }
+    50%  { transform: translate(-2px, -1px); }
+    60%  { transform: translate(2px, 1px); }
+    70%  { transform: translate(-1px, 0); }
+    80%  { transform: translate(1px, 0); }
+  }
+
+  /* Number colors */
+  #minesweeper-game .ms-cell.n1 { color: #4FC3F7; }
+  #minesweeper-game .ms-cell.n2 { color: var(--accent-green); }
+  #minesweeper-game .ms-cell.n3 { color: var(--accent-red); }
+  #minesweeper-game .ms-cell.n4 { color: var(--accent-purple); }
+  #minesweeper-game .ms-cell.n5 { color: var(--accent-orange); }
+  #minesweeper-game .ms-cell.n6 { color: #00BCD4; }
+  #minesweeper-game .ms-cell.n7 { color: var(--text-primary); }
+  #minesweeper-game .ms-cell.n8 { color: var(--text-muted); }
+
+  #minesweeper-game .ms-lvl-btn.active {
+    background: var(--gradient-accent);
+    color: #fff;
+    border-color: transparent;
+  }
+
+  #minesweeper-game .ms-actions {
+    display: flex; gap: var(--space-2); justify-content: center;
+    margin-top: var(--space-4); flex-wrap: wrap;
+  }
+
+  @media (max-width: 600px) {
+    #minesweeper-game .ms-cell { font-size: 0.65rem; }
+  }
+</style>

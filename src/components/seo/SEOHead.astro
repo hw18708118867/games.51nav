@@ -1,0 +1,72 @@
+---
+import { SITE_CONFIG } from '../../lib/constants';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  canonicalUrl?: string;
+  noIndex?: boolean;
+}
+
+const {
+  title,
+  description = SITE_CONFIG.description,
+  ogImage = SITE_CONFIG.ogImage,
+  canonicalUrl,
+  noIndex = false,
+} = Astro.props;
+
+const fullTitle = title ? `${title} | ${SITE_CONFIG.name}` : `${SITE_CONFIG.name} — ${SITE_CONFIG.tagline}`;
+const fullImage = ogImage.startsWith('http') ? ogImage : `${SITE_CONFIG.url}${ogImage}`;
+---
+
+<!-- Primary Meta -->
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonicalUrl || SITE_CONFIG.url} />
+
+<!-- Robots -->
+{noIndex ? (
+  <meta name="robots" content="noindex, nofollow" />
+) : (
+  <meta name="robots" content="index, follow" />
+)}
+
+<!-- Open Graph -->
+<meta property="og:title" content={fullTitle} />
+<meta property="og:description" content={description} />
+<meta property="og:type" content="website" />
+<meta property="og:url" content={canonicalUrl || SITE_CONFIG.url} />
+<meta property="og:image" content={fullImage} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:site_name" content={SITE_CONFIG.name} />
+<meta property="og:locale" content={SITE_CONFIG.locale} />
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={fullImage} />
+
+<!-- Global Styles -->
+<link rel="stylesheet" href="/src/styles/global.css" />
+
+<!-- Google Analytics (GA4) via GitHub variable -->
+{import.meta.env.PUBLIC_GA4_ID && (
+  <>
+    <script async src={`https://www.googletagmanager.com/gtag/js?id=${import.meta.env.PUBLIC_GA4_ID}`}></script>
+    <script is:inline define:vars={{ gaId: import.meta.env.PUBLIC_GA4_ID }}>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{gaId}');
+    </script>
+  </>
+)}
+
+<!-- Google Search Console verification -->
+{import.meta.env.PUBLIC_GSC_VERIFY && (
+  <meta name="google-site-verification" content={import.meta.env.PUBLIC_GSC_VERIFY} />
+)}

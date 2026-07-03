@@ -1,0 +1,100 @@
+---
+// Puzzle15 — sliding puzzle with difficulty
+---
+
+<div class="game-container" id="puzzle15-game">
+  <div class="p15-board" id="p15-board"></div>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="p15-moves">0</span><span class="stat-label">Moves</span></div>
+    <div class="stat"><span class="stat-value" id="p15-time">0s</span><span class="stat-label">Time</span></div>
+  </div>
+  <div class="p15-actions">
+    <div class="p15-difficulty"><button class="game-btn game-btn--secondary p15-diff-btn active" data-diff="easy">Easy 3×3</button><button class="game-btn game-btn--secondary p15-diff-btn" data-diff="medium">Medium 4×4</button><button class="game-btn game-btn--secondary p15-diff-btn" data-diff="hard">Hard 5×5</button></div>
+    <button class="game-btn game-btn--secondary" id="p15-shuffle">Shuffle</button>
+    <button class="game-btn game-btn--primary" id="p15-restart">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = { easy: { size: 3, shuffle: 100 }, medium: { size: 4, shuffle: 200 }, hard: { size: 5, shuffle: 300 } };
+  let diff: keyof typeof DIFF = 'easy', size = DIFF[diff].size;
+  let board: number[] = [], moves = 0, won = false;
+  let timer: ReturnType<typeof setInterval>|null = null, startTime = 0, started = false;
+
+  const boardEl = document.getElementById('p15-board')!, movesEl = document.getElementById('p15-moves')!, timeEl = document.getElementById('p15-time')!;
+
+  function render(): void {
+    boardEl.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    boardEl.innerHTML = '';
+    board.forEach((v, i) => {
+      if (v === 0) { boardEl.appendChild(document.createElement('div')); return; }
+      const tile = document.createElement('div');
+      tile.className = 'p15-tile';
+      tile.textContent = String(v);
+      if (v === i + 1) tile.classList.add('correct');
+      tile.addEventListener('click', () => move(i));
+      boardEl.appendChild(tile);
+    });
+    movesEl.textContent = String(moves);
+  }
+
+  function move(idx: number): void {
+    if (won) return;
+    const z = board.indexOf(0);
+    const zr = Math.floor(z / size), zc = z % size, tr = Math.floor(idx / size), tc = idx % size;
+    if (Math.abs(zr - tr) + Math.abs(zc - tc) !== 1) return;
+
+    if (!started) { started = true; startTime = Date.now(); timer = setInterval(() => { timeEl.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`; }, 200); }
+    moves++;
+    [board[z], board[idx]] = [board[idx], board[z]];
+    render();
+
+    if (board.every((v, i) => v === 0 || v === i + 1)) {
+      won = true; if (timer) clearInterval(timer);
+      saveScore('15-puzzle', Math.max(100, 1000 - moves * 2));
+      (window as any).__gameFeedback?.({ type: 'win', title: 'Solved!', score: `${moves} moves`, detail: `${Math.floor((Date.now() - startTime) / 1000)}s · ${size}×${size}` });
+    }
+  }
+
+  function shuffleBoard(): void {
+    const total = size * size;
+    board = [...Array(total - 1).keys()].map(i => i + 1); board.push(0);
+    const shuffleMoves = DIFF[diff].shuffle;
+    for (let i = 0; i < shuffleMoves; i++) {
+      const z = board.indexOf(0), zr = Math.floor(z / size), zc = z % size;
+      const neighbors = [z - 1, z + 1, z - size, z + size].filter(n => n >= 0 && n < total && Math.abs(Math.floor(n / size) - zr) + Math.abs(n % size - zc) === 1);
+      const n = neighbors[Math.floor(Math.random() * neighbors.length)];
+      [board[z], board[n]] = [board[n], board[z]];
+    }
+    moves = 0; started = false; won = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    timeEl.textContent = '0s'; render();
+  }
+
+  function init(): void {
+    size = DIFF[diff].size;
+    const total = size * size;
+    board = [...Array(total - 1).keys()].map(i => i + 1); board.push(0);
+    moves = 0; started = false; won = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    timeEl.textContent = '0s'; render();
+  }
+
+  document.querySelectorAll('.p15-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.p15-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('p15-shuffle')!.addEventListener('click', shuffleBoard);
+  document.getElementById('p15-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #puzzle15-game .p15-board { display: grid; gap: 6px; max-width: 400px; margin: 0 auto; background: var(--bg-tertiary); border-radius: var(--radius-lg); padding: 8px; }
+  #puzzle15-game .p15-tile { aspect-ratio: 1; background: var(--bg-secondary); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: clamp(1.2rem, 4vw, 1.8rem); font-weight: 700; color: var(--text-primary); cursor: pointer; transition: all .15s; border: 2px solid var(--border-subtle); }
+  #puzzle15-game .p15-tile:hover { border-color: var(--accent-cyan); box-shadow: 0 0 14px rgba(0,229,255,.2); transform: scale(1.05); }
+  #puzzle15-game .p15-tile.correct { border-color: var(--accent-green); background: rgba(0,230,118,.1); color: var(--accent-green); }
+  #puzzle15-game .p15-actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; margin-top: var(--space-4); }
+  #puzzle15-game .p15-difficulty { display: flex; gap: var(--space-2); justify-content: center; width: 100%; margin-bottom: var(--space-2); }
+  #puzzle15-game .p15-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #puzzle15-game .p15-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

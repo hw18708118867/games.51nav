@@ -1,0 +1,34 @@
+---
+interface Props {
+  initialSeconds?: number;
+}
+
+const { initialSeconds = 0 } = Astro.props;
+---
+
+<div class="timer" id="timer-display">
+  <span class="timer-value" id="timer-value">0.00</span>
+  <span class="timer-unit">s</span>
+</div>
+
+<style>
+  .timer {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: var(--space-4) 0;
+  }
+
+  .timer-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    color: var(--accent-cyan);
+  }
+
+  .timer-unit {
+    font-size: var(--text-lg);
+    color: var(--text-muted);
+  }
+</style>

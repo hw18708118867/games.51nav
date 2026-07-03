@@ -1,0 +1,115 @@
+---
+interface Props {
+  score: number;
+  unit: string;
+  label?: string;
+  bestScore?: number | null;
+  averageScore?: number | null;
+  percentile?: number | null;
+}
+
+const { score, unit, label = 'Your Score', bestScore, averageScore, percentile } = Astro.props;
+---
+
+<div class="score-display">
+  <div class="score-main">
+    <span class="score-label">{label}</span>
+    <span class="score-value">{score}</span>
+    <span class="score-unit">{unit}</span>
+  </div>
+
+  <div class="score-details">
+    {bestScore !== undefined && bestScore !== null && (
+      <div class="score-detail">
+        <span class="score-detail-label">Best</span>
+        <span class="score-detail-value">{bestScore} {unit}</span>
+      </div>
+    )}
+    {averageScore !== undefined && averageScore !== null && (
+      <div class="score-detail">
+        <span class="score-detail-label">Average</span>
+        <span class="score-detail-value">{averageScore} {unit}</span>
+      </div>
+    )}
+    {percentile !== undefined && percentile !== null && (
+      <div class="score-detail">
+        <span class="score-detail-label">Percentile</span>
+        <span class="score-detail-value">Top {100 - percentile}%</span>
+      </div>
+    )}
+  </div>
+</div>
+
+<style>
+  .score-display {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    text-align: center;
+  }
+
+  .score-main {
+    margin-bottom: var(--space-6);
+  }
+
+  .score-label {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+  }
+
+  .score-value {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 4rem;
+    font-weight: 700;
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .score-unit {
+    display: block;
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    margin-top: var(--space-1);
+  }
+
+  .score-details {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-8);
+    flex-wrap: wrap;
+  }
+
+  .score-detail {
+    text-align: center;
+  }
+
+  .score-detail-label {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: var(--space-1);
+  }
+
+  .score-detail-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  @media (max-width: 768px) {
+    .score-value {
+      font-size: 3rem;
+    }
+  }
+</style>

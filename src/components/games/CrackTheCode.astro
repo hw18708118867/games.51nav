@@ -1,0 +1,150 @@
+---
+// CrackTheCode — Mastermind-style code breaking
+---
+
+<div class="game-container" id="crackcode-game">
+  <div class="cc-board" id="cc-board"></div>
+  <div class="cc-picker" id="cc-picker"></div>
+  <div class="cc-info" id="cc-info">Guess the 4-color code</div>
+  <div class="cc-actions">
+    <div class="cc-difficulty"><button class="game-btn game-btn--secondary cc-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary cc-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary cc-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="cc-restart">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const COLORS = ['#FF5252','#4FC3F7','#00E676','#FFD740','#FF9100','#FF4081'];
+  const DIFF = { easy: { len: 3, colors: 4, guesses: 10 }, medium: { len: 4, colors: 6, guesses: 8 }, hard: { len: 5, colors: 6, guesses: 8 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+
+  let code: string[] = [];
+  let guesses: { colors: string[]; black: number; white: number }[] = [];
+  let current: string[] = [];
+  let over = false;
+
+  const boardEl = document.getElementById('cc-board')!;
+  const pickerEl = document.getElementById('cc-picker')!;
+  const infoEl = document.getElementById('cc-info')!;
+
+  function render(): void {
+    boardEl.innerHTML = '';
+    // Previous guesses
+    guesses.forEach(g => {
+      const row = document.createElement('div');
+      row.className = 'cc-row';
+      g.colors.forEach(c => {
+        const peg = document.createElement('div');
+        peg.className = 'cc-peg'; peg.style.background = c;
+        row.appendChild(peg);
+      });
+      const hint = document.createElement('div');
+      hint.className = 'cc-hint';
+      hint.innerHTML = '●'.repeat(g.black) + '○'.repeat(g.white) + '<span class="cc-empty">·</span>'.repeat(cfg.len - g.black - g.white);
+      row.appendChild(hint);
+      boardEl.appendChild(row);
+    });
+    // Current guess
+    if (!over) {
+      const row = document.createElement('div');
+      row.className = 'cc-row cc-current';
+      for (let i = 0; i < cfg.len; i++) {
+        const peg = document.createElement('div');
+        peg.className = 'cc-peg';
+        if (current[i]) peg.style.background = current[i];
+        peg.addEventListener('click', () => { if (current[i]) { current[i] = ''; render(); } });
+        row.appendChild(peg);
+      }
+      const submit = document.createElement('button');
+      submit.className = 'cc-submit';
+      submit.setAttribute('type', 'button');
+      submit.textContent = '✓';
+      submit.disabled = current.filter(Boolean).length < cfg.len;
+      submit.addEventListener('click', submitGuess);
+      row.appendChild(submit);
+      boardEl.appendChild(row);
+    }
+
+    // Color picker
+    pickerEl.innerHTML = '';
+    COLORS.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'cc-color-btn';
+      btn.setAttribute('type', 'button');
+      btn.style.background = c;
+      btn.addEventListener('click', () => pickColor(c));
+      pickerEl.appendChild(btn);
+    });
+  }
+
+  function pickColor(c: string): void {
+    if (over) return;
+    const idx = current.findIndex(v => !v);
+    if (idx >= 0 && idx < cfg.len) { current[idx] = c; render(); }
+  }
+
+  function submitGuess(): void {
+    if (current.filter(Boolean).length < cfg.len) return;
+    let black = 0, white = 0;
+    const codeCopy = [...code];
+    const guessCopy = [...current];
+
+    for (let i = 0; i < cfg.len; i++) {
+      if (guessCopy[i] === codeCopy[i]) { black++; codeCopy[i] = guessCopy[i] = ''; }
+    }
+    for (let i = 0; i < cfg.len; i++) {
+      if (!guessCopy[i]) continue;
+      const ci = codeCopy.indexOf(guessCopy[i]);
+      if (ci >= 0) { white++; codeCopy[ci] = ''; }
+    }
+
+    guesses.push({ colors: [...current], black, white });
+    current = Array(cfg.len).fill('');
+    render();
+
+    if (black === cfg.len) {
+      over = true;
+      saveScore('crack-the-code', cfg.guesses - guesses.length + 1);
+      infoEl.textContent = `Cracked in ${guesses.length} guesses! 🎉`;
+      (window as any).__gameFeedback?.({ type: 'win', title: 'Code Cracked!', score: `${guesses.length}/${cfg.guesses}`, detail: 'Great deduction!' });
+    } else if (guesses.length >= cfg.guesses) {
+      over = true;
+      infoEl.innerHTML = `Code: ${code.map(c => `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${c};vertical-align:middle;"></span>`).join(' ')}`;
+      (window as any).__gameFeedback?.({ type: 'lose', title: 'Out of Guesses', score: 'Game Over', detail: 'Try again!' });
+    }
+  }
+
+  function init(): void {
+    cfg = DIFF[diff];
+    const pool = COLORS.slice(0, cfg.colors);
+    code = Array.from({ length: cfg.len }, () => pool[Math.floor(Math.random() * pool.length)]);
+    guesses = []; current = Array(cfg.len).fill(''); over = false;
+    infoEl.textContent = `Guess the ${cfg.len}-color code`;
+    render();
+  }
+
+  document.querySelectorAll('.cc-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.cc-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('cc-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #crackcode-game .cc-board { max-width: 360px; margin: 0 auto var(--space-4); }
+  #crackcode-game .cc-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  #crackcode-game .cc-row.cc-current { background: var(--bg-tertiary); border-radius: var(--radius-md); padding: 6px; }
+  #crackcode-game .cc-peg { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border-subtle); cursor: pointer; transition: transform 0.15s; }
+  #crackcode-game .cc-peg:hover { transform: scale(1.15); }
+  #crackcode-game .cc-hint { font-size: 0.9rem; letter-spacing: 2px; margin-left: var(--space-2); }
+  #crackcode-game .cc-hint .cc-empty { color: var(--text-muted); }
+  #crackcode-game .cc-submit { margin-left: auto; width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border-medium); background: var(--accent-cyan); color: #000; font-weight: 700; cursor: pointer; font-size: 1rem; }
+  #crackcode-game .cc-submit:disabled { opacity: 0.3; cursor: not-allowed; }
+  #crackcode-game .cc-picker { display: flex; gap: 8px; justify-content: center; margin-bottom: var(--space-4); }
+  #crackcode-game .cc-color-btn { width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: all 0.15s; padding: 0; }
+  #crackcode-game .cc-color-btn:hover { border-color: #fff; transform: scale(1.15); }
+  #crackcode-game .cc-info { text-align: center; font-weight: 600; margin-bottom: var(--space-2); }
+  #crackcode-game .cc-actions { text-align: center; margin-top: var(--space-4); }
+  #crackcode-game .cc-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #crackcode-game .cc-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #crackcode-game .cc-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

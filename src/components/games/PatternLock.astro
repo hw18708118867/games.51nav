@@ -1,0 +1,119 @@
+---
+// PatternLock — remember and draw the pattern
+---
+
+<div class="game-container" id="patternlock-game">
+  <div class="pl-info" id="pl-info">Watch the pattern...</div>
+  <div class="pl-grid" id="pl-grid"></div>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="pl-level">1</span><span class="stat-label">Level</span></div>
+    <div class="stat"><span class="stat-value" id="pl-lives">3</span><span class="stat-label">Lives</span></div>
+  </div>
+  <div class="pl-actions">
+    <div class="pl-difficulty"><button class="game-btn game-btn--secondary pl-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary pl-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary pl-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="pl-restart">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = { easy: { speed: 700, showMs: 2000, lives: 5 }, medium: { speed: 500, showMs: 1500, lives: 3 }, hard: { speed: 300, showMs: 1000, lives: 2 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  let pattern: number[] = [], input: number[] = [];
+  let level = 1, lives = 5;
+  let phase: 'show'|'draw' = 'show', over = false, showTimer: ReturnType<typeof setInterval>|null = null;
+
+  const gridEl = document.getElementById('pl-grid')!, infoEl = document.getElementById('pl-info')!;
+  const lEl = document.getElementById('pl-level')!, vEl = document.getElementById('pl-lives')!;
+
+  function render(hl: number[]): void {
+    gridEl.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'pl-dot';
+      if (hl.includes(i)) dot.classList.add('active');
+      if (phase === 'draw') {
+        dot.classList.add('drawable');
+        if (input.includes(i)) dot.classList.add('drawn');
+      }
+      dot.addEventListener('click', () => click(i));
+      gridEl.appendChild(dot);
+    }
+  }
+
+  function click(i: number): void {
+    if (phase !== 'draw' || over || input.includes(i)) return;
+    input.push(i);
+    render([]);
+    if (input.length === pattern.length) check();
+  }
+
+  function check(): void {
+    const ok = pattern.every((p, i) => p === input[i]);
+    if (ok) { level++; lEl.textContent = String(level); input = []; playSequence(); }
+    else {
+      lives--; vEl.textContent = String(lives);
+      if (lives <= 0) { over = true; saveScore('pattern-lock', level); infoEl.textContent = `Game Over! Level ${level}`; render([]); (window as any).__gameFeedback?.({ type: 'lose', title: 'Game Over', score: `Level ${level}`, detail: `${diff}` }); return; }
+      infoEl.textContent = 'Wrong! Watch again...';
+      input = []; render([]);
+      setTimeout(() => playSequence(), 800);
+    }
+  }
+
+  function playSequence(): void {
+    if (over) return;
+    phase = 'show';
+    // Generate pattern
+    pattern = [];
+    const len = Math.min(level + 2, 9);
+    while (pattern.length < len) { const n = Math.floor(Math.random() * 9); if (!pattern.includes(n)) pattern.push(n); }
+
+    infoEl.textContent = 'Watch the pattern...';
+    clearShowTimer();
+    let idx = 0;
+    const hl: number[] = [];
+
+    showTimer = setInterval(() => {
+      if (idx > 0) { hl.pop(); render(hl); }
+      if (idx < pattern.length) {
+        hl.push(pattern[idx]);
+        render(hl);
+        idx++;
+      } else {
+        clearShowTimer();
+        render([]);
+        phase = 'draw';
+        input = [];
+        infoEl.textContent = 'Your turn! Draw the pattern';
+      }
+    }, cfg.speed);
+  }
+
+  function clearShowTimer(): void { if (showTimer) { clearInterval(showTimer); showTimer = null; } }
+
+  function init(): void {
+    cfg = DIFF[diff]; clearShowTimer();
+    level = 1; lives = cfg.lives; over = false;
+    lEl.textContent = '1'; vEl.textContent = String(lives);
+    playSequence();
+  }
+
+  document.querySelectorAll('.pl-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.pl-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('pl-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #patternlock-game .pl-info { text-align: center; font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-4); min-height: 30px; }
+  #patternlock-game .pl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 260px; margin: 0 auto; }
+  #patternlock-game .pl-dot { aspect-ratio: 1; border-radius: 50%; background: var(--bg-tertiary); border: 3px solid var(--border-medium); transition: all .15s; cursor: default; }
+  #patternlock-game .pl-dot.active { background: var(--accent-cyan); border-color: var(--accent-cyan); box-shadow: 0 0 24px rgba(0,229,255,.5); transform: scale(1.12); }
+  #patternlock-game .pl-dot.drawable { cursor: pointer; }
+  #patternlock-game .pl-dot.drawable:hover { border-color: var(--accent-purple); box-shadow: 0 0 14px rgba(124,77,255,.3); transform: scale(1.05); }
+  #patternlock-game .pl-dot.drawn { background: var(--accent-purple); border-color: var(--accent-purple); box-shadow: 0 0 14px rgba(124,77,255,.3); }
+  #patternlock-game .pl-actions { text-align: center; margin-top: var(--space-4); }
+  #patternlock-game .pl-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #patternlock-game .pl-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #patternlock-game .pl-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

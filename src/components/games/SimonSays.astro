@@ -1,0 +1,149 @@
+---
+// SimonSays — pattern memory game
+---
+
+<div class="game-container" id="simon-says-game">
+  <div class="simon-status" id="simon-status">Watch the sequence...</div>
+  <div class="simon-board" id="simon-board">
+    <button class="simon-btn simon-btn--red" data-id="0" id="simon-0"></button>
+    <button class="simon-btn simon-btn--blue" data-id="1" id="simon-1"></button>
+    <button class="simon-btn simon-btn--green" data-id="2" id="simon-2"></button>
+    <button class="simon-btn simon-btn--yellow" data-id="3" id="simon-3"></button>
+  </div>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="simon-level-display">1</span><span class="stat-label">Level</span></div>
+    <div class="stat"><span class="stat-value" id="simon-length-display">1</span><span class="stat-label">Length</span></div>
+    <div class="stat"><span class="stat-value" id="simon-best-display">1</span><span class="stat-label">Best</span></div>
+  </div>
+  <div class="simon-actions">
+    <div class="simon-difficulty"><button class="game-btn game-btn--secondary ss-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary ss-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary ss-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="simon-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+  const DIFF = { easy: { speed: 700, pts: 10 }, medium: { speed: 450, pts: 15 }, hard: { speed: 280, pts: 20 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  let seq: number[] = [], idx = 0, level = 1, best = 1, score = 0;
+  let phase: 'show'|'input'|'cooldown' = 'show', over = false;
+  let showIdx = 0, showTimer: ReturnType<typeof setInterval>|null = null;
+
+  const btns = [0,1,2,3].map(i=>document.getElementById(`simon-${i}`)!);
+  const statusEl = document.getElementById('simon-status')!;
+  const lEl = document.getElementById('simon-level-display')!, lenEl = document.getElementById('simon-length-display')!, bEl = document.getElementById('simon-best-display')!;
+
+  function playSequence(): void {
+    if (over) return;
+    clearShow();
+    phase = 'show';
+    showIdx = 0;
+    // Clear any remaining active states
+    btns.forEach(b => b.classList.remove('active', 'pressed'));
+    statusEl.textContent = 'Watch the sequence...';
+
+    showTimer = setInterval(() => {
+      // Turn off previous
+      if (showIdx > 0) btns[seq[showIdx - 1]].classList.remove('active');
+
+      if (showIdx < seq.length) {
+        // Turn on current
+        btns[seq[showIdx]].classList.add('active');
+        showIdx++;
+      } else {
+        // Done showing — last button already cleared by the check above
+        clearShow();
+        phase = 'input';
+        idx = 0;
+        statusEl.textContent = 'Your turn! Repeat the sequence';
+      }
+    }, cfg.speed);
+  }
+
+  function clearShow(): void { if (showTimer) { clearInterval(showTimer); showTimer = null; } }
+
+  function press(id: number): void {
+    if (phase !== 'input' || over) return;
+
+    // Flash the button
+    btns[id].classList.add('pressed');
+    setTimeout(() => btns[id].classList.remove('pressed'), 150);
+
+    if (id === seq[idx]) {
+      idx++;
+      if (idx >= seq.length) {
+        // Correct sequence!
+        phase = 'cooldown';
+        level++;
+        score += level * cfg.pts;
+        if (level > best) best = level;
+        update();
+        seq.push(Math.floor(Math.random() * 4));
+        statusEl.textContent = '✓ Correct!';
+        setTimeout(() => {
+          statusEl.textContent = 'Watch the next sequence...';
+          playSequence();
+        }, 800);
+      }
+    } else {
+      // Wrong!
+      over = true;
+      clearShow();
+      saveScore('simon-says', level);
+      btns.forEach(b => b.classList.add('wrong'));
+      statusEl.textContent = '✗ Game Over!';
+      (window as any).__gameFeedback?.({ type: 'lose', title: 'Wrong Button!', score: `Level ${level}`, detail: `Best: ${best} · ${diff}` });
+    }
+  }
+
+  function update(): void {
+    lEl.textContent = String(level);
+    lenEl.textContent = String(seq.length);
+    bEl.textContent = String(best);
+  }
+
+  function init(): void {
+    cfg = DIFF[diff];
+    clearShow();
+    seq = [Math.floor(Math.random() * 4)];
+    level = 1; idx = 0; over = false;
+    update();
+    statusEl.textContent = 'Watch the sequence...';
+    setTimeout(() => playSequence(), 600);
+  }
+
+  btns.forEach((b, i) => b.addEventListener('click', () => press(i)));
+  document.querySelectorAll('.ss-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.ss-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('simon-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #simon-says-game .simon-status { text-align: center; font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-4); min-height: 28px; }
+  #simon-says-game .simon-board { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; max-width: 340px; margin: 0 auto; }
+  #simon-says-game .simon-btn {
+    aspect-ratio: 1; border: 4px solid rgba(255,255,255,0.15); border-radius: var(--radius-lg);
+    cursor: pointer; min-height: 150px; transition: all .15s; opacity: 0.85;
+  }
+  #simon-says-game .simon-btn:hover { opacity: 1; border-color: rgba(255,255,255,0.4); transform: scale(1.02); }
+  #simon-says-game .simon-btn--red { background: #FF5252; }
+  #simon-says-game .simon-btn--blue { background: #4FC3F7; }
+  #simon-says-game .simon-btn--green { background: #00E676; }
+  #simon-says-game .simon-btn--yellow { background: #FFD740; }
+  #simon-says-game .simon-btn.active { opacity: 1; transform: scale(1.06); box-shadow: 0 0 40px currentColor; border-color: #fff; }
+  #simon-says-game .simon-btn.pressed { opacity: 1; transform: scale(0.95); box-shadow: 0 0 25px currentColor; border-color: #fff; }
+  #simon-says-game .simon-btn.wrong { opacity: 0.2; animation: ss-shake .4s ease; }
+  @keyframes ss-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+  #simon-says-game .simon-actions { text-align: center; margin-top: var(--space-6); }
+  #simon-says-game .simon-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #simon-says-game .ss-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #simon-says-game .ss-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  @media (max-width: 400px) { #simon-says-game .simon-btn { min-height: 120px; } }
+</style>

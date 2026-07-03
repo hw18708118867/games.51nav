@@ -1,0 +1,288 @@
+---
+// Wordle — guess the 5-letter word in 6 tries
+---
+
+<div class="game-container" id="wordle-game">
+  <div class="wl-message" id="wl-message"></div>
+  <div class="wl-board" id="wl-board"></div>
+  <div class="wl-keyboard" id="wl-keyboard"></div>
+  <div class="wl-actions">
+    <button class="game-btn game-btn--primary" id="wl-submit">Submit</button>
+    <div class="wl-difficulty"><button class="game-btn game-btn--secondary wl-diff-btn active" data-diff="easy">Easy 6</button><button class="game-btn game-btn--secondary wl-diff-btn" data-diff="medium">Medium 5</button><button class="game-btn game-btn--secondary wl-diff-btn" data-diff="hard">Hard 4</button></div>
+    <button class="game-btn game-btn--primary" id="wl-restart">New Word</button>
+  </div>
+  <p class="wl-help">Type any 5-letter word and press Enter. Green=correct position, Orange=wrong position, Gray=not in word.</p>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const WORDS = [
+    'ABOUT','ABOVE','ACTOR','ADMIT','ADOPT','AFTER','AGAIN','AGENT','ALBUM','ALIEN',
+    'ALIGN','ALIVE','ALLOW','ALONE','ALONG','ALTER','ANGEL','ANGRY','ANKLE','APART',
+    'APPLE','APPLY','ARENA','ARGUE','ARISE','ARRAY','ASIDE','ASSET','AVOID','AWARD',
+    'BASIC','BEACH','BEGIN','BEING','BELOW','BENCH','BIRTH','BLACK','BLAME','BLANK',
+    'BLAST','BLAZE','BLEED','BLEND','BLESS','BLIND','BLOCK','BLOOD','BLOOM','BOARD',
+    'BOOST','BOUND','BRAIN','BRAND','BRAVE','BREAD','BREAK','BREED','BRICK','BRIEF',
+    'BROAD','BROWN','BRUSH','BUILD','BURST','BUYER','CABIN','CARRY','CATCH','CAUSE',
+    'CHAIN','CHAIR','CHARM','CHART','CHASE','CHEAP','CHECK','CHEST','CHIEF','CHILD',
+    'CIVIL','CLAIM','CLASS','CLEAN','CLEAR','CLIMB','CLING','CLOCK','CLOSE','CLOUD',
+    'COACH','COAST','COULD','COUNT','COURT','COVER','CRACK','CRAFT','CRANE','CRASH',
+    'CRAZY','CREAM','CREEK','CRIME','CROSS','CROWD','CROWN','CRUSH','CURVE','CYCLE',
+    'DAILY','DANCE','DEATH','DEBUG','DECAY','DELAY','DEPTH','DIRTY','DREAM','DRESS',
+    'DRINK','DRIVE','DRONE','DROWN','DRUMS','DRUNK','DYING','EAGER','EARLY','EARTH',
+    'EIGHT','ELECT','ELITE','EMPTY','ENEMY','ENJOY','ENTER','ENTRY','EQUAL','ERROR',
+    'EVENT','EVERY','EXACT','EXIST','EXTRA','FAINT','FAIRY','FAITH','FALSE','FANCY',
+    'FAULT','FEAST','FENCE','FIBER','FIELD','FIFTY','FIGHT','FINAL','FIRST','FIXED',
+    'FLAME','FLASH','FLEET','FLESH','FLOAT','FLOOD','FLOOR','FLOUR','FLUID','FOCUS',
+    'FORCE','FORGE','FORTH','FORUM','FOUND','FRAME','FRANK','FRAUD','FRESH','FRONT',
+    'FROST','FRUIT','FULLY','FUNNY','GHOST','GIANT','GIVEN','GLASS','GLOBE','GLORY',
+    'GLOVE','GRACE','GRADE','GRAIN','GRAND','GRANT','GRASP','GRASS','GRAVE','GREAT',
+    'GREEN','GREET','GRIEF','GRIND','GROSS','GROUP','GROVE','GROWN','GUARD','GUESS',
+    'GUEST','GUIDE','GUILT','HABIT','HAPPY','HARSH','HEART','HEAVY','HEDGE','HELLO',
+    'HENCE','HONOR','HORSE','HOTEL','HOUSE','HUMAN','HUMOR','HURRY','IDEAL','IMAGE',
+    'IMPLY','INDEX','INNER','INPUT','ISSUE','IVORY','JOINT','JUDGE','JUICE','KNIFE',
+    'KNOCK','KNOWN','LABEL','LABOR','LARGE','LATER','LAUGH','LAYER','LEARN','LEASE',
+    'LEAVE','LEGAL','LEMON','LEVEL','LEVER','LIGHT','LIMIT','LINEN','LIVER','LIVID',
+    'LOCAL','LOGIC','LOOSE','LOVER','LOWER','LOYAL','LUCKY','LUNCH','MAGIC','MAJOR',
+    'MAKER','MARCH','MATCH','MAYOR','MEDIA','MERCY','MERGE','MERIT','METAL','METER',
+    'MIGHT','MINOR','MINUS','MIXED','MODEL','MONEY','MONTH','MORAL','MOTOR','MOUNT',
+    'MOUSE','MOUTH','MOVIE','MUSIC','NAIVE','NERVE','NEVER','NIGHT','NOBLE','NOISE',
+    'NORTH','NOTED','NOVEL','NURSE','OCCUR','OCEAN','OFFER','OFTEN','OLIVE','OPERA',
+    'ORDER','OTHER','OUGHT','OUTER','OWNER','OXIDE','PAINT','PANEL','PANIC','PAPER',
+    'PARTY','PASTE','PATCH','PAUSE','PEACE','PHASE','PHONE','PHOTO','PIANO','PIECE',
+    'PILOT','PINCH','PITCH','PIXEL','PLACE','PLAIN','PLANE','PLANT','PLATE','PLEAD',
+    'PLEAS','PLUCK','PLUMB','PLUME','PLUMP','PLUNGE','PLUNK','PLURAL','PLUSH','PLYER',
+    'POINT','POLAR','POUND','POWER','PRESS','PRICE','PRIDE','PRIME','PRINT','PRIOR',
+    'PRIZE','PROBE','PROOF','PROUD','PROVE','PSALM','PULSE','PUNCH','PUPIL','PURSE',
+    'QUEEN','QUEST','QUICK','QUIET','QUITE','QUOTA','QUOTE','RADAR','RADIO','RAISE',
+    'RANGE','RAPID','RATIO','REACH','REACT','READY','REALM','REBEL','REFER','REIGN',
+    'RELAX','REPLY','RIDER','RIDGE','RIFLE','RIGHT','RIGID','RISKY','RIVAL','RIVER',
+    'ROBIN','ROBOT','ROCKY','ROGER','ROMAN','ROUGE','ROUGH','ROUND','ROUTE','ROYAL',
+    'RUGBY','RULER','RURAL','SAINT','SALAD','SAUCE','SCALE','SCARE','SCENE','SCOPE',
+    'SCORE','SCOUT','SCREW','SEIZE','SENSE','SERVE','SEVEN','SHADE','SHAFT','SHAKE',
+    'SHALL','SHAME','SHAPE','SHARE','SHARK','SHARP','SHAVE','SHEEP','SHEER','SHEET',
+    'SHELF','SHELL','SHIFT','SHINE','SHIRT','SHOCK','SHOOT','SHORE','SHORT','SHOUT',
+    'SIGHT','SILLY','SINCE','SIXTH','SIXTY','SKILL','SKULL','SLAVE','SLEEP','SLICE',
+    'SLIDE','SLOPE','SMALL','SMART','SMELL','SMILE','SMOKE','SNAKE','SOLAR','SOLID',
+    'SOLVE','SORRY','SOUND','SOUTH','SPACE','SPARE','SPEAK','SPEED','SPELL','SPEND',
+    'SPICE','SPINE','SPITE','SPLIT','SPOKE','SPORT','SPRAY','SQUAD','STACK','STAFF',
+    'STAGE','STAKE','STALE','STALL','STAMP','STAND','STARE','START','STATE','STAYS',
+    'STEAK','STEAL','STEAM','STEEL','STEEP','STEER','STERN','STICK','STIFF','STILL',
+    'STOCK','STONE','STOOD','STORE','STORM','STORY','STOVE','STRAP','STRAW','STRAY',
+    'STRIP','STUCK','STUDY','STUFF','STYLE','SUGAR','SUITE','SUNNY','SUPER','SURGE',
+    'SWAMP','SWEAR','SWEEP','SWEET','SWEPT','SWIFT','SWING','SWORD','SWORE','SWORN',
+    'TABLE','TASTE','TEACH','TEETH','THANK','THEFT','THEIR','THEME','THERE','THICK',
+    'THIEF','THING','THINK','THIRD','THORN','THOSE','THREE','THREW','THROW','THUMB',
+    'TIGER','TIGHT','TIMER','TIRED','TITLE','TODAY','TOKEN','TOPIC','TOTAL','TOUCH',
+    'TOUGH','TOWER','TOXIC','TRACE','TRACK','TRADE','TRAIL','TRAIN','TRAIT','TRASH',
+    'TREAT','TREND','TRIAL','TRIBE','TRICK','TRIED','TROOP','TRUCK','TRULY','TRUMP',
+    'TRUNK','TRUST','TRUTH','TUMOR','TWICE','TWINS','TWIST','ULTRA','UNCLE','UNDER',
+    'UNION','UNITE','UNITY','UNTIL','UPPER','UPSET','URBAN','USAGE','USUAL','UTTER',
+    'VALID','VALUE','VERGE','VERSE','VIDEO','VIGOR','VIRAL','VIRUS','VISIT','VITAL',
+    'VIVID','VOCAL','VODKA','VOICE','VOTER','WAGON','WASTE','WATCH','WATER','WEAVE',
+    'WEIGH','WEIRD','WHALE','WHEAT','WHEEL','WHERE','WHICH','WHILE','WHITE','WHOLE',
+    'WHOSE','WIDEN','WIDTH','WOMAN','WOMEN','WORLD','WORRY','WORSE','WORST','WORTH',
+    'WOULD','WOUND','WRATH','WRITE','WRONG','WROTE','YACHT','YIELD','YOUNG','YOUTH',
+  ];
+  const DIFF = { easy: { maxGuesses: 6 }, medium: { maxGuesses: 5 }, hard: { maxGuesses: 4 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  let target = '';
+  let guesses: string[] = [];
+  let current = '';
+  let over = false;
+
+  const boardEl = document.getElementById('wl-board')!;
+  const keyboardEl = document.getElementById('wl-keyboard')!;
+  const messageEl = document.getElementById('wl-message')!;
+  const keys = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+
+  function renderBoard(): void {
+    boardEl.innerHTML = '';
+    for (let r = 0; r < cfg.maxGuesses; r++) {
+      for (let c = 0; c < 5; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'wl-cell';
+        if (r < guesses.length) {
+          const g = guesses[r];
+          cell.textContent = g[c];
+          if (g[c] === target[c]) cell.classList.add('correct');
+          else if (target.includes(g[c])) cell.classList.add('present');
+          else cell.classList.add('absent');
+        } else if (r === guesses.length && c < current.length) {
+          cell.textContent = current[c];
+          cell.classList.add('active');
+        }
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  function renderKeyboard(): void {
+    keyboardEl.innerHTML = '';
+    const status: Record<string, string> = {};
+    guesses.forEach(g => {
+      for (let i = 0; i < 5; i++) {
+        const ch = g[i];
+        if (g[i] === target[i]) status[ch] = 'correct';
+        else if (target.includes(g[i]) && status[ch] !== 'correct') status[ch] = 'present';
+        else if (!status[ch]) status[ch] = 'absent';
+      }
+    });
+
+    keys.forEach(row => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'wl-kb-row';
+      row.split('').forEach(ch => {
+        const btn = document.createElement('button');
+        btn.className = 'wl-kb-btn';
+        btn.setAttribute('type', 'button');
+        btn.textContent = ch;
+        if (status[ch]) btn.classList.add(status[ch]);
+        btn.addEventListener('click', () => type(ch));
+        rowEl.appendChild(btn);
+      });
+      keyboardEl.appendChild(rowEl);
+    });
+
+    // Enter + Backspace
+    const lastRow = keyboardEl.lastElementChild!;
+    const enter = document.createElement('button');
+    enter.className = 'wl-kb-btn wl-kb-wide'; enter.setAttribute('type', 'button'); enter.textContent = '↵';
+    enter.addEventListener('click', submit);
+    lastRow.prepend(enter);
+    const back = document.createElement('button');
+    back.className = 'wl-kb-btn wl-kb-wide'; back.setAttribute('type', 'button'); back.textContent = '⌫';
+    back.addEventListener('click', backspace);
+    lastRow.appendChild(back);
+  }
+
+  function type(ch: string): void {
+    if (over) return;
+    if (current.length < 5) { current += ch; renderBoard(); }
+  }
+
+  function backspace(): void {
+    if (over) return;
+    if (current.length > 0) { current = current.slice(0, -1); renderBoard(); }
+  }
+
+  function submit(): void {
+    if (over) return;
+    if (current.length < 5) return;
+    if (!WORDS.includes(current)) {
+      boardEl.classList.add('wl-shake');
+      messageEl.textContent = 'Not in word list';
+      messageEl.className = 'wl-message wl-msg-err';
+      setTimeout(() => { boardEl.classList.remove('wl-shake'); messageEl.textContent = ''; }, 800);
+      return;
+    }
+    messageEl.textContent = '';
+
+    guesses.push(current);
+    current = '';
+    renderBoard();
+    renderKeyboard();
+
+    const won = guesses[guesses.length - 1] === target;
+    if (won) {
+      over = true;
+      saveScore('wordle', guesses.length);
+      setTimeout(() => {
+        (window as any).__gameFeedback?.({
+          type: 'win',
+          title: guesses.length <= 3 ? 'Amazing!' : guesses.length <= 5 ? 'Great!' : 'Phew!',
+          score: `${guesses.length}/${cfg.maxGuesses}`,
+          detail: `The word was ${target}`,
+        });
+      }, 1200);
+    } else if (guesses.length >= cfg.maxGuesses) {
+      over = true;
+      saveScore('wordle', 0);
+      setTimeout(() => {
+        (window as any).__gameFeedback?.({
+          type: 'lose', title: 'Game Over',
+          score: target,
+          detail: 'Better luck next time!',
+        });
+      }, 1200);
+    }
+  }
+
+  function init(): void {
+    cfg = DIFF[diff];
+    target = WORDS[Math.floor(Math.random() * WORDS.length)];
+    guesses = []; current = ''; over = false; messageEl.textContent = '';
+    renderBoard(); renderKeyboard();
+  }
+
+  document.querySelectorAll('.wl-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.wl-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') submit();
+    else if (e.key === 'Backspace') backspace();
+    else if (/^[a-zA-Z]$/.test(e.key)) type(e.key.toUpperCase());
+  });
+
+  document.getElementById('wl-submit')!.addEventListener('click', submit);
+  document.getElementById('wl-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #wordle-game .wl-board {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    max-width: 300px; margin: 0 auto var(--space-4);
+  }
+  #wordle-game .wl-board.wl-shake { animation: wl-shake 0.5s ease; }
+  @keyframes wl-shake {
+    0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)}
+  }
+  #wordle-game .wl-cell {
+    aspect-ratio: 1; border: 2px solid var(--border-medium);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 1.6rem; font-weight: 700;
+    text-transform: uppercase; border-radius: var(--radius-sm);
+    transition: all 0.3s;
+  }
+  #wordle-game .wl-cell.active { border-color: var(--border-strong); }
+  #wordle-game .wl-cell.correct { background: var(--accent-green); border-color: var(--accent-green); color: #fff; animation: wl-flip 0.5s ease; }
+  #wordle-game .wl-cell.present { background: var(--accent-orange); border-color: var(--accent-orange); color: #fff; animation: wl-flip 0.5s ease; }
+  #wordle-game .wl-cell.absent { background: var(--bg-tertiary); border-color: var(--border-subtle); color: var(--text-muted); animation: wl-flip 0.5s ease; }
+  @keyframes wl-flip { 0%{transform:rotateX(0)} 50%{transform:rotateX(90deg)} 100%{transform:rotateX(0)} }
+
+  #wordle-game .wl-keyboard { max-width: 400px; margin: 0 auto; }
+  #wordle-game .wl-kb-row { display: flex; gap: 4px; justify-content: center; margin-bottom: 6px; }
+  #wordle-game .wl-kb-btn {
+    min-width: 32px; height: 44px; border: none; border-radius: var(--radius-sm);
+    background: var(--bg-tertiary); color: var(--text-primary);
+    font-family: var(--font-sans); font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; padding: 0 6px;
+  }
+  #wordle-game .wl-kb-btn:hover { background: var(--bg-hover); }
+  #wordle-game .wl-kb-btn.correct { background: var(--accent-green); color: #fff; }
+  #wordle-game .wl-kb-btn.present { background: var(--accent-orange); color: #fff; }
+  #wordle-game .wl-kb-btn.absent { background: var(--border-subtle); color: var(--text-muted); }
+  #wordle-game .wl-kb-wide { min-width: 48px; }
+  #wordle-game .wl-message { text-align: center; min-height: 24px; font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2); }
+  #wordle-game .wl-message.wl-msg-err { color: var(--accent-red); animation: wl-msg-pop .3s ease; }
+  @keyframes wl-msg-pop { 0%{transform:scale(.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+
+  #wordle-game .wl-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #wordle-game .wl-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #wordle-game .wl-help { text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-2); max-width: 350px; margin-left: auto; margin-right: auto; }
+  #wordle-game .wl-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  #wordle-game .wl-actions { text-align: center; margin-top: var(--space-4); }
+
+  @media (max-width: 400px) {
+    #wordle-game .wl-cell { font-size: 1.3rem; }
+    #wordle-game .wl-kb-btn { min-width: 26px; height: 38px; font-size: 0.7rem; }
+  }
+</style>

@@ -1,0 +1,218 @@
+---
+// VisualMemory — remember highlighted tile positions
+---
+
+<div class="game-container" id="visual-memory-game">
+  <div class="vm-grid" id="vm-grid"></div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="vm-level-display">1</span>
+      <span class="stat-label">Level</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="vm-lives-display">3</span>
+      <span class="stat-label">Lives</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="vm-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+  </div>
+
+  <div class="vm-actions">
+    <button class="game-btn game-btn--primary" id="vm-restart-btn">New Game</button>
+  </div>
+
+  <div id="vm-result" class="vm-result" style="display: none;">
+    <div class="result-content">
+      <h3>Game Over!</h3>
+      <div class="result-stats">
+        <div class="result-stat">
+          <span class="result-stat-value" id="vm-final-level">1</span>
+          <span class="result-stat-label">Level</span>
+        </div>
+        <div class="result-stat">
+          <span class="result-stat-value" id="vm-final-score">0</span>
+          <span class="result-stat-label">Score</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const SIZE = 5;
+  let level = 1, lives = 3, score = 0;
+  let highlighted: number[] = [], selected: number[] = [];
+  let phase: 'show' | 'input' | 'feedback' = 'show';
+  let over = false;
+
+  const grid = document.getElementById('vm-grid')!;
+  const levelEl = document.getElementById('vm-level-display')!;
+  const livesEl = document.getElementById('vm-lives-display')!;
+  const scoreEl = document.getElementById('vm-score-display')!;
+  const resultDiv = document.getElementById('vm-result')!;
+
+  function genHighlighted(): number[] {
+    const count = Math.min(level + 2, SIZE * SIZE);
+    const cells: number[] = [];
+    while (cells.length < count) {
+      const c = Math.floor(Math.random() * SIZE * SIZE);
+      if (!cells.includes(c)) cells.push(c);
+    }
+    return cells;
+  }
+
+  function render(showHL = false): void {
+    grid.innerHTML = '';
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'vm-cell';
+      if (showHL && highlighted.includes(i)) cell.classList.add('hl');
+      if (phase === 'feedback') {
+        if (highlighted.includes(i)) cell.classList.add('correct');
+        if (selected.includes(i) && !highlighted.includes(i)) cell.classList.add('wrong');
+      }
+      if (phase === 'input' && selected.includes(i)) cell.classList.add('picked');
+      cell.addEventListener('click', () => click(i));
+      grid.appendChild(cell);
+    }
+  }
+
+  function click(i: number): void {
+    if (phase !== 'input' || over || selected.includes(i)) return;
+    selected.push(i);
+    render(false);
+    if (selected.length === highlighted.length) check();
+  }
+
+  function check(): void {
+    phase = 'feedback';
+    const ok = highlighted.every(c => selected.includes(c)) && selected.length === highlighted.length;
+    render(false);
+
+    if (ok) {
+      score += level * 10; level++;
+      update();
+      setTimeout(start, 1000);
+    } else {
+      lives--;
+      update();
+      if (lives <= 0) finish();
+      else setTimeout(start, 1500);
+    }
+  }
+
+  function start(): void {
+    if (over) return;
+    selected = [];
+    highlighted = genHighlighted();
+    phase = 'show';
+    render(true);
+    setTimeout(() => { phase = 'input'; render(false); }, Math.max(2000, level * 800));
+  }
+
+  function update(): void {
+    levelEl.textContent = String(level);
+    livesEl.textContent = String(lives);
+    scoreEl.textContent = String(score);
+  }
+
+  function finish(): void {
+    over = true;
+    saveScore('visual-memory', score);
+    document.getElementById('vm-final-level')!.textContent = String(level);
+    document.getElementById('vm-final-score')!.textContent = String(score);
+    resultDiv.style.display = 'block';
+    (window as any).__gameFeedback?.({
+      type: 'lose',
+      title: 'Game Over',
+      score: `Level ${level}`,
+      detail: `Score: ${score} · Keep practicing!`,
+    });
+  }
+
+  function init(): void {
+    level = 1; lives = 3; score = 0; over = false;
+    resultDiv.style.display = 'none';
+    update(); start();
+  }
+
+  document.getElementById('vm-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #visual-memory-game .vm-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  #visual-memory-game .vm-cell {
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  #visual-memory-game .vm-cell.hl {
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(0, 229, 255, 0.4);
+  }
+
+  #visual-memory-game .vm-cell.picked {
+    background: var(--accent-purple);
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 10px rgba(124, 77, 255, 0.3);
+  }
+
+  #visual-memory-game .vm-cell.correct {
+    background: rgba(0, 230, 118, 0.15) !important;
+    border-color: var(--accent-green) !important;
+    box-shadow: 0 0 12px rgba(0, 230, 118, 0.3);
+  }
+
+  #visual-memory-game .vm-cell.wrong {
+    background: rgba(255, 82, 82, 0.15) !important;
+    border-color: var(--accent-red) !important;
+    box-shadow: 0 0 12px rgba(255, 82, 82, 0.3);
+  }
+
+  #visual-memory-game .vm-cell:not(.hl):not(.picked):not(.correct):not(.wrong):hover {
+    border-color: var(--border-strong);
+    background: var(--bg-hover);
+  }
+
+  #visual-memory-game .vm-actions { text-align: center; margin-top: var(--space-6); }
+
+  #visual-memory-game .vm-result { margin-top: var(--space-6); animation: fadeIn 0.5s ease; }
+
+  #visual-memory-game .vm-result .result-content {
+    text-align: center; background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg); padding: var(--space-6);
+  }
+
+  #visual-memory-game .vm-result .result-content h3 {
+    font-size: var(--text-2xl); margin-bottom: var(--space-4); color: var(--accent-orange);
+  }
+
+  #visual-memory-game .vm-result .result-stats { display: flex; justify-content: center; gap: var(--space-12); }
+  #visual-memory-game .vm-result .result-stat { text-align: center; }
+  #visual-memory-game .vm-result .result-stat-value {
+    display: block; font-family: var(--font-mono); font-size: 2.5rem; font-weight: 700; color: var(--accent-cyan);
+  }
+  #visual-memory-game .vm-result .result-stat-label { font-size: var(--text-sm); color: var(--text-muted); text-transform: uppercase; }
+
+  @media (max-width: 480px) {
+    #visual-memory-game .vm-grid { gap: 5px; }
+  }
+</style>

@@ -1,0 +1,256 @@
+---
+// WordSearch — find hidden words with touch support
+---
+
+<div class="game-container" id="word-search-game">
+  <div class="ws2-header">
+    <div class="ws2-word-list" id="ws2-word-list"></div>
+  </div>
+
+  <div class="ws2-grid" id="ws2-grid"></div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="ws2-found-display">0/6</span>
+      <span class="stat-label">Found</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="ws2-time-display">0s</span>
+      <span class="stat-label">Time</span>
+    </div>
+  </div>
+
+  <div class="ws2-actions">
+    <div class="ws2-difficulty">
+      <button class="game-btn game-btn--secondary ws2-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary ws2-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary ws2-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--secondary" id="ws2-giveup-btn">Give Up</button>
+    <button class="game-btn game-btn--primary" id="ws2-restart-btn">New Puzzle</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const SETS = [
+    ['BRAIN','MEMORY','THINK','LOGIC','SMART','MIND'],
+    ['SPEED','QUICK','FAST','RAPID','SWIFT','HASTE'],
+    ['FOCUS','CLEAR','SHARP','ALERT','READY','KEEN'],
+    ['LEARN','STUDY','GROWTH','SKILL','TRAIN','PRACT'],
+    ['SOLVE','CRACK','DECODE','FIND','SEEK','HUNT'],
+    ['PLANET','GALAXY','STAR','MOON','COMET','ORBIT'],
+  ];
+
+  const DIFF = { easy: { size: 8, words: 4 }, medium: { size: 10, words: 6 }, hard: { size: 12, words: 8 } };
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let words: string[] = [];
+  let grid: string[][] = [];
+  let positions: { word: string; cells: [number,number][] }[] = [];
+  let found: Set<string> = new Set();
+  let selecting: [number,number][] = [];
+  let dragging = false;
+  let startTime = 0;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let over = false;
+  let showAnswers = false;
+
+  const wordListEl = document.getElementById('ws2-word-list')!;
+  const gridEl = document.getElementById('ws2-grid')!;
+  const foundEl = document.getElementById('ws2-found-display')!;
+  const timeEl = document.getElementById('ws2-time-display')!;
+
+  const DIRS: [number,number][] = [[0,1],[1,0],[1,1],[0,-1],[-1,0],[-1,-1],[1,-1],[-1,1]];
+
+  function generate(): void {
+    const pool = SETS[Math.floor(Math.random() * SETS.length)];
+    words = pool.slice(0, cfg.words);
+    grid = Array.from({ length: cfg.size }, () => Array(cfg.size).fill(''));
+    positions = [];
+
+    words.forEach(word => {
+      let ok = false;
+      while (!ok) {
+        const [dr, dc] = DIRS[Math.floor(Math.random() * DIRS.length)];
+        const r = Math.floor(Math.random() * cfg.size);
+        const c = Math.floor(Math.random() * cfg.size);
+        const er = r + dr * (word.length - 1);
+        const ec = c + dc * (word.length - 1);
+        if (er < 0 || er >= cfg.size || ec < 0 || ec >= cfg.size) continue;
+        let can = true;
+        const cells: [number,number][] = [];
+        for (let i = 0; i < word.length; i++) {
+          const cr = r + dr * i, cc = c + dc * i;
+          if (grid[cr][cc] !== '' && grid[cr][cc] !== word[i]) { can = false; break; }
+          cells.push([cr, cc]);
+        }
+        if (can) {
+          for (let i = 0; i < word.length; i++) grid[r + dr * i][c + dc * i] = word[i];
+          positions.push({ word, cells });
+          ok = true;
+        }
+      }
+    });
+
+    // Fill empty
+    for (let r = 0; r < cfg.size; r++)
+      for (let c = 0; c < cfg.size; c++)
+        if (!grid[r][c]) grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+
+    showAnswers = false;
+  }
+
+  function revealAnswers(): void {
+    showAnswers = true;
+    over = true;
+    if (timer) { clearInterval(timer); timer = null; }
+    // Mark all words as found
+    positions.forEach(wp => found.add(wp.word));
+    render();
+  }
+
+  function render(): void {
+    wordListEl.innerHTML = words.map(w =>
+      `<span class="ws2-word ${found.has(w) ? 'found' : ''}">${found.has(w) ? '✓ ' : ''}${w}</span>`
+    ).join('');
+
+    gridEl.style.gridTemplateColumns = `repeat(${cfg.size}, 1fr)`;
+    gridEl.innerHTML = '';
+    for (let r = 0; r < cfg.size; r++) {
+      for (let c = 0; c < cfg.size; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'ws2-cell';
+        cell.textContent = grid[r][c];
+        if (selecting.some(([sr, sc]) => sr === r && sc === c)) cell.classList.add('selected');
+        for (const wp of positions) {
+          if (found.has(wp.word) && wp.cells.some(([cr, cc]) => cr === r && cc === c)) cell.classList.add('found');
+          if (showAnswers && wp.cells.some(([cr, cc]) => cr === r && cc === c)) cell.classList.add('answer');
+        }
+        cell.addEventListener('pointerdown', e => { e.preventDefault(); startSel(r, c); });
+        cell.addEventListener('pointerenter', () => contSel(r, c));
+        gridEl.appendChild(cell);
+      }
+    }
+  }
+
+  function startSel(r: number, c: number): void {
+    if (over) return;
+    dragging = true;
+    selecting = [[r, c]];
+    render();
+  }
+
+  function contSel(r: number, c: number): void {
+    if (!dragging || over) return;
+    // Check adjacency to LAST selected cell
+    const last = selecting[selecting.length - 1];
+    if (last[0] === r && last[1] === c) return;
+    // Must be in a straight line from the first cell
+    const [fr, fc] = selecting[0];
+    const dr = Math.sign(r - fr);
+    const dc = Math.sign(c - fc);
+
+    // Only allow if the new cell is on the same line as the first two cells
+    if (selecting.length >= 2) {
+      const [sr, sc] = selecting[1];
+      const sdr = Math.sign(sr - fr);
+      const sdc = Math.sign(sc - fc);
+      if (dr !== sdr || dc !== sdc) return;
+    }
+
+    // Must be adjacent to the last cell along the line
+    const lr = last[0], lc = last[1];
+    if (Math.abs(r - lr) > 1 || Math.abs(c - lc) > 1) return;
+    // Don't allow re-selecting
+    if (selecting.some(([sr, sc]) => sr === r && sc === c)) return;
+
+    selecting.push([r, c]);
+    render();
+  }
+
+  document.addEventListener('pointerup', () => {
+    if (!dragging || over) { dragging = false; return; }
+    dragging = false;
+    if (!startTime) { startTime = Date.now(); timer = setInterval(() => { timeEl.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`; }, 500); }
+
+    const str = selecting.map(([r, c]) => grid[r][c]).join('');
+    const rev = [...selecting].reverse().map(([r, c]) => grid[r][c]).join('');
+
+    for (const wp of positions) {
+      if (found.has(wp.word)) continue;
+      if (str === wp.word || rev === wp.word) {
+        found.add(wp.word);
+        break;
+      }
+    }
+    selecting = [];
+    foundEl.textContent = `${found.size}/${cfg.words}`;
+    render();
+    if (found.size === cfg.words) finish();
+  });
+
+  // Touch support
+  gridEl.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+  function finish(): void {
+    over = true;
+    if (timer) { clearInterval(timer); timer = null; }
+    const elapsed = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+    saveScore('word-search', Math.max(100, 600 - elapsed * 2));
+    (window as any).__gameFeedback?.({
+      type: 'win', title: 'All Found!',
+      score: `${elapsed}s`, detail: `${cfg.words} words · ${difficulty}`,
+    });
+  }
+
+  function init(): void {
+    if (timer) { clearInterval(timer); timer = null; }
+    cfg = DIFF[difficulty];
+    found = new Set(); selecting = []; startTime = 0; dragging = false; over = false; showAnswers = false;
+    timeEl.textContent = '0s'; foundEl.textContent = `0/${cfg.words}`;
+    generate(); render();
+  }
+
+  document.querySelectorAll('.ws2-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.ws2-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('ws2-giveup-btn')!.addEventListener('click', revealAnswers);
+  document.getElementById('ws2-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #word-search-game .ws2-header { text-align: center; margin-bottom: var(--space-4); }
+  #word-search-game .ws2-word-list { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
+  #word-search-game .ws2-word {
+    padding: var(--space-1) var(--space-3); background: var(--bg-tertiary);
+    border-radius: var(--radius-full); font-size: var(--text-sm); font-weight: 500;
+    font-family: var(--font-mono); letter-spacing: 0.1em;
+  }
+  #word-search-game .ws2-word.found { background: rgba(0,230,118,0.15); color: var(--accent-green); text-decoration: line-through; }
+  #word-search-game .ws2-grid {
+    display: grid; gap: 3px; max-width: 480px; margin: 0 auto; user-select: none; touch-action: none;
+  }
+  #word-search-game .ws2-cell {
+    aspect-ratio: 1; background: var(--bg-tertiary); border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 1.15rem; font-weight: 600; cursor: pointer;
+    color: var(--text-primary); transition: all 0.1s;
+  }
+  #word-search-game .ws2-cell:hover { background: var(--bg-hover); }
+  #word-search-game .ws2-cell.selected { background: var(--accent-cyan); color: #000; }
+  #word-search-game .ws2-cell.found { background: rgba(0,230,118,0.15); color: var(--accent-green); }
+  #word-search-game .ws2-cell.answer { background: rgba(255,145,0,0.2); color: var(--accent-orange); font-weight: 700; border-color: var(--accent-orange); }
+  #word-search-game .ws2-actions { text-align: center; margin-top: var(--space-6); }
+  #word-search-game .ws2-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #word-search-game .ws2-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #word-search-game .ws2-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  @media (max-width: 480px) { #word-search-game .ws2-cell { font-size: 0.8rem; } }
+</style>

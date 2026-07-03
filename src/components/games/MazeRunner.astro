@@ -1,0 +1,130 @@
+---
+// MazeRunner — navigate a randomly generated maze
+---
+
+<div class="game-container" id="maze-game">
+  <div class="mz-info">Use arrow keys or swipe to reach the 🏁</div>
+  <div class="mz-board" id="mz-board"></div>
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="mz-time">0s</span>
+      <span class="stat-label">Time</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="mz-best">---</span>
+      <span class="stat-label">Best</span>
+    </div>
+  </div>
+  <div class="mz-actions">
+    <div class="mz-difficulty"><button class="game-btn game-btn--secondary mz-diff-btn active" data-diff="easy">Easy 10×10</button><button class="game-btn game-btn--secondary mz-diff-btn" data-diff="medium">Medium 15×15</button><button class="game-btn game-btn--secondary mz-diff-btn" data-diff="hard">Hard 20×20</button></div>
+    <button class="game-btn game-btn--primary" id="mz-restart">New Maze</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF: Record<string, number> = { easy: 10, medium: 15, hard: 20 };
+  let diff: keyof typeof DIFF = 'medium', size = DIFF[diff];
+  let maze: number[][] = []; // 0=path, 1=wall
+  let px = 1, py = 1;
+  let startTime = 0;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let over = false;
+  let bestTime = Infinity;
+
+  const boardEl = document.getElementById('mz-board')!;
+  const timeEl = document.getElementById('mz-time')!;
+  const bestEl = document.getElementById('mz-best')!;
+
+  function generate(): void {
+    // DFS maze generation
+    maze = Array.from({ length: size }, () => Array(size).fill(1));
+    const stack: [number, number][] = [[1, 1]];
+    maze[1][1] = 0;
+
+    while (stack.length) {
+      const [r, c] = stack[stack.length - 1];
+      const dirs: [number, number, number, number][] = [[r-2,c,r-1,c],[r+2,c,r+1,c],[r,c-2,r,c-1],[r,c+2,r,c+1]]
+        .filter(([nr, nc]) => nr > 0 && nr < size - 1 && nc > 0 && nc < size - 1 && maze[nr][nc] === 1);
+      if (dirs.length) {
+        const [nr, nc, wr, wc] = dirs[Math.floor(Math.random() * dirs.length)];
+        maze[wr][wc] = 0; maze[nr][nc] = 0;
+        stack.push([nr, nc]);
+      } else { stack.pop(); }
+    }
+    // Goal at bottom-right
+    maze[size - 2][size - 2] = 0;
+    maze[size - 2][size - 1] = 0;
+  }
+
+  function render(): void {
+    boardEl.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    boardEl.innerHTML = '';
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'mz-cell';
+        if (maze[r][c]) cell.classList.add('wall');
+        if (r === py && c === px) cell.classList.add('player');
+        if (r === size - 2 && c === size - 2) cell.classList.add('goal');
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  function move(dr: number, dc: number): void {
+    if (over) return;
+    if (!startTime) { startTime = Date.now(); timer = setInterval(() => { timeEl.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`; }, 200); }
+    const nr = py + dr, nc = px + dc;
+    if (nr < 0 || nr >= size || nc < 0 || nc >= size || maze[nr][nc]) return;
+    px = nc; py = nr;
+    render();
+    if (py === size - 2 && px === size - 2) {
+      over = true;
+      if (timer) clearInterval(timer);
+      const t = Math.floor((Date.now() - startTime) / 1000);
+      if (t < bestTime) { bestTime = t; bestEl.textContent = `${t}s`; }
+      saveScore('maze-runner', Math.max(100, 500 - t));
+      (window as any).__gameFeedback?.({ type: 'win', title: 'Escaped!', score: `${t}s`, detail: `${size}×${size} maze` });
+    }
+  }
+
+  function init(): void {
+    size = DIFF[diff]; px = 1; py = 1; startTime = 0; over = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    timeEl.textContent = '0s';
+    generate(); render();
+  }
+
+  document.addEventListener('keydown', e => {
+    const map: Record<string, [number, number]> = { ArrowUp: [-1,0], ArrowDown: [1,0], ArrowLeft: [0,-1], ArrowRight: [0,1] };
+    if (map[e.key]) { e.preventDefault(); move(...map[e.key]); }
+  });
+
+  let tx = 0, ty = 0;
+  boardEl.addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; });
+  boardEl.addEventListener('touchend', e => {
+    const dx = (e.changedTouches[0]?.clientX || 0) - tx, dy = (e.changedTouches[0]?.clientY || 0) - ty;
+    if (Math.abs(dx) > Math.abs(dy)) move(0, dx > 0 ? 1 : -1);
+    else move(dy > 0 ? 1 : -1, 0);
+  });
+
+  document.querySelectorAll('.mz-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.mz-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('mz-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #maze-game .mz-info { text-align: center; font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--space-3); }
+  #maze-game .mz-board { display: grid; gap: 1px; margin: 0 auto; background: #333; width: 100%; max-width: 500px; }
+  #maze-game .mz-cell { aspect-ratio: 1; background: #1a1a2e; }
+  #maze-game .mz-cell.wall { background: #2a2a3e; border: 1px solid #444; }
+  #maze-game .mz-cell.player { background: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,229,255,0.6); border-radius: 3px; z-index: 1; position: relative; }
+  #maze-game .mz-cell.goal { background: var(--accent-green); box-shadow: 0 0 12px rgba(0,230,118,0.5); border-radius: 3px; }
+  #maze-game .mz-actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; margin-top: var(--space-4); }
+  #maze-game .mz-active { background: var(--gradient-accent) !important; color: #fff !important; border-color: transparent !important; }
+  #maze-game .mz-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #maze-game .mz-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #maze-game .mz-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

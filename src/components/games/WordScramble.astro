@@ -1,0 +1,244 @@
+---
+// WordScramble — unscramble letters with difficulty
+---
+
+<div class="game-container" id="word-scramble-game">
+  <div class="ws-display">
+    <div class="ws-scrambled" id="ws-scrambled">L P P A E</div>
+    <div class="ws-hint" id="ws-hint">Fruit</div>
+    <div class="ws-feedback" id="ws-feedback"></div>
+    <div class="ws-input-area">
+      <input type="text" id="ws-input" class="ws-input" placeholder="Answer..." autocomplete="off" autocapitalize="off" />
+      <button class="game-btn game-btn--primary" id="ws-submit-btn">Submit</button>
+    </div>
+    <button class="game-btn game-btn--secondary" id="ws-skip-btn">Skip</button>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="ws-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="ws-round-display">1/10</span>
+      <span class="stat-label">Word</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="ws-streak-display">0</span>
+      <span class="stat-label">Streak</span>
+    </div>
+  </div>
+
+  <div class="ws-history" id="ws-history"></div>
+
+  <div class="ws-actions">
+    <div class="ws-difficulty">
+      <button class="game-btn game-btn--secondary ws-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary ws-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary ws-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="ws-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const WORDS = {
+    easy: [
+      { word: 'APPLE', hint: 'Fruit' },{ word: 'LEMON', hint: 'Citrus' },{ word: 'EAGLE', hint: 'Bird' },
+      { word: 'RIVER', hint: 'Water' },{ word: 'STORM', hint: 'Weather' },{ word: 'TOWER', hint: 'Building' },
+      { word: 'QUEEN', hint: 'Royalty' },{ word: 'CANDLE', hint: 'Light' },{ word: 'BRIDGE', hint: 'Crossing' },
+      { word: 'CASTLE', hint: 'Fortress' },{ word: 'FOREST', hint: 'Trees' },{ word: 'GARDEN', hint: 'Plants' },
+      { word: 'WINDOW', hint: 'Glass' },{ word: 'ANCHOR', hint: 'Ship' },{ word: 'BREEZE', hint: 'Wind' },
+      { word: 'PLANET', hint: 'Space' },{ word: 'TIGER', hint: 'Animal' },{ word: 'CLOUD', hint: 'Sky' },
+      { word: 'SNAKE', hint: 'Reptile' },{ word: 'PIANO', hint: 'Instrument' },
+    ],
+    medium: [
+      { word: 'DRAGON', hint: 'Mythical' },{ word: 'DESERT', hint: 'Dry land' },{ word: 'ISLAND', hint: 'Land' },
+      { word: 'JUNGLE', hint: 'Forest' },{ word: 'HARBOR', hint: 'Port' },{ word: 'PALACE', hint: 'Royal home' },
+      { word: 'VALLEY', hint: 'Between hills' },{ word: 'EMERALD', hint: 'Green gem' },{ word: 'GALAXY', hint: 'Stars' },
+      { word: 'HORIZON', hint: 'Skyline' },{ word: 'KNIGHT', hint: 'Warrior' },{ word: 'NEEDLE', hint: 'Sharp' },
+      { word: 'OCEAN', hint: 'Water' },{ word: 'SILVER', hint: 'Metal' },{ word: 'SHADOW', hint: 'Dark shape' },
+      { word: 'RABBIT', hint: 'Animal' },{ word: 'GUITAR', hint: 'Music' },{ word: 'COFFEE', hint: 'Drink' },
+      { word: 'MARBLE', hint: 'Stone' },{ word: 'FALCON', hint: 'Bird' },
+    ],
+    hard: [
+      { word: 'MOUNTAIN', hint: 'Tall peak' },{ word: 'FOUNTAIN', hint: 'Water feature' },{ word: 'PHOENIX', hint: 'Fire bird' },
+      { word: 'DIAMOND', hint: 'Gem' },{ word: 'THUNDER', hint: 'Storm sound' },{ word: 'UMBRELLA', hint: 'Rain shield' },
+      { word: 'LANTERN', hint: 'Light source' },{ word: 'VOLCANO', hint: 'Eruption' },{ word: 'PYRAMID', hint: 'Egypt' },
+      { word: 'GLACIER', hint: 'Ice mass' },{ word: 'WHISPER', hint: 'Quiet talk' },{ word: 'HARVEST', hint: 'Crop gathering' },
+      { word: 'JOURNEY', hint: 'Trip' },{ word: 'CRYSTAL', hint: 'Clear gem' },{ word: 'MYSTERY', hint: 'Unknown' },
+      { word: 'TREASURE', hint: 'Hidden riches' },{ word: 'DOLPHIN', hint: 'Sea animal' },{ word: 'TRUMPET', hint: 'Brass instrument' },
+      { word: 'BLIZZARD', hint: 'Snow storm' },{ word: 'TWILIGHT', hint: 'Dusk' },
+    ],
+  };
+
+  const TOTAL = 10;
+
+  let difficulty: keyof typeof WORDS = 'easy';
+  let pool = WORDS[difficulty];
+  let used: Set<number> = new Set();
+  let currentWord = '', currentHint = '';
+  let round = 1, score = 0, streak = 0;
+  let history: { word: string; correct: boolean }[] = [];
+  let over = false;
+
+  const scrambledEl = document.getElementById('ws-scrambled')!;
+  const hintEl = document.getElementById('ws-hint')!;
+  const fbEl = document.getElementById('ws-feedback')!;
+  const inputEl = document.getElementById('ws-input') as HTMLInputElement;
+  const historyEl = document.getElementById('ws-history')!;
+  const scoreEl = document.getElementById('ws-score-display')!;
+  const roundEl = document.getElementById('ws-round-display')!;
+  const streakEl = document.getElementById('ws-streak-display')!;
+
+  function scramble(word: string): string {
+    const letters = word.split('');
+    for (let i = letters.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [letters[i], letters[j]] = [letters[j], letters[i]];
+    }
+    return letters.join('') === word ? scramble(word) : letters.join(' ');
+  }
+
+  function pickWord(): void {
+    const avail = pool.map((_, i) => i).filter(i => !used.has(i));
+    if (!avail.length) { used.clear(); pickWord(); return; }
+    const idx = avail[Math.floor(Math.random() * avail.length)];
+    used.add(idx);
+    currentWord = pool[idx].word;
+    currentHint = pool[idx].hint;
+    scrambledEl.textContent = scramble(currentWord);
+    hintEl.textContent = `Hint: ${currentHint}`;
+  }
+
+  function check(): void {
+    if (over) return;
+    const answer = inputEl.value.trim().toUpperCase();
+    if (answer === currentWord) {
+      score += 10 + streak * 5; streak++;
+      fbEl.textContent = '✓ Correct!';
+      fbEl.className = 'ws-feedback ws-ok';
+      history.push({ word: currentWord, correct: true });
+    } else {
+      streak = 0;
+      fbEl.innerHTML = `✗ Answer: <strong>${currentWord}</strong>`;
+      fbEl.className = 'ws-feedback ws-err';
+      scrambledEl.classList.add('ws-shake');
+      setTimeout(() => scrambledEl.classList.remove('ws-shake'), 400);
+      history.push({ word: currentWord, correct: false });
+    }
+    inputEl.value = '';
+    round++;
+    update();
+    if (round > TOTAL) finish();
+    else { pickWord(); renderHistory(); }
+    inputEl.focus();
+  }
+
+  function skip(): void {
+    if (over) return;
+    streak = 0;
+    fbEl.innerHTML = `Answer: <strong>${currentWord}</strong>`;
+    fbEl.className = 'ws-feedback ws-info';
+    history.push({ word: currentWord, correct: false });
+    round++;
+    update();
+    if (round > TOTAL) finish();
+    else { pickWord(); renderHistory(); }
+  }
+
+  function renderHistory(): void {
+    historyEl.innerHTML = history.map(h =>
+      `<span class="ws-hist-item ${h.correct ? 'ws-hist-ok' : 'ws-hist-err'}">${h.correct ? '✓' : '✗'} ${h.word}</span>`
+    ).join('');
+  }
+
+  function update(): void {
+    scoreEl.textContent = String(score);
+    roundEl.textContent = `${Math.min(round, TOTAL)}/${TOTAL}`;
+    streakEl.textContent = String(streak);
+  }
+
+  function finish(): void {
+    over = true;
+    saveScore('word-scramble', score);
+    scrambledEl.textContent = 'Complete!';
+    hintEl.textContent = `Final Score: ${score}`;
+    fbEl.textContent = '';
+    inputEl.disabled = true;
+    renderHistory();
+    (window as any).__gameFeedback?.({
+      type: score >= 80 ? 'win' : 'lose',
+      title: score >= 80 ? 'Word Master!' : 'Good Effort!',
+      score: `${score} pts`,
+      detail: `${difficulty} · ${streak} streak`,
+    });
+  }
+
+  function init(): void {
+    pool = WORDS[difficulty];
+    used = new Set(); round = 1; score = 0; streak = 0; over = false; history = [];
+    inputEl.disabled = false; fbEl.textContent = ''; historyEl.innerHTML = '';
+    update(); pickWord(); inputEl.focus();
+  }
+
+  document.getElementById('ws-submit-btn')!.addEventListener('click', check);
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  document.getElementById('ws-skip-btn')!.addEventListener('click', skip);
+
+  document.querySelectorAll('.ws-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.ws-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof WORDS;
+      init();
+    });
+  });
+  document.getElementById('ws-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #word-scramble-game .ws-display { text-align: center; }
+  #word-scramble-game .ws-scrambled {
+    font-family: var(--font-mono); font-size: 3rem; font-weight: 700;
+    color: var(--accent-cyan); letter-spacing: 0.3em; margin-bottom: var(--space-3);
+    transition: color 0.2s;
+  }
+  #word-scramble-game .ws-scrambled.ws-shake { animation: ws-shake 0.4s ease; }
+  @keyframes ws-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  #word-scramble-game .ws-hint { font-size: var(--text-lg); color: var(--text-muted); margin-bottom: var(--space-2); }
+  #word-scramble-game .ws-feedback { font-size: var(--text-base); font-weight: 600; min-height: 24px; margin-bottom: var(--space-3); }
+  #word-scramble-game .ws-feedback.ws-ok { color: var(--accent-green); animation: ws-pop 0.3s ease; }
+  #word-scramble-game .ws-feedback.ws-err { color: var(--accent-red); animation: ws-pop 0.3s ease; }
+  #word-scramble-game .ws-feedback.ws-info { color: var(--accent-orange); }
+  @keyframes ws-pop { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+
+  #word-scramble-game .ws-input-area {
+    display: flex; gap: var(--space-3); justify-content: center; align-items: center; margin-bottom: var(--space-3);
+  }
+  #word-scramble-game .ws-input {
+    width: 220px; background: var(--bg-tertiary); border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+    font-family: var(--font-mono); font-size: 1.25rem; color: var(--text-primary);
+    text-align: center; text-transform: uppercase; outline: none; letter-spacing: 0.15em;
+  }
+  #word-scramble-game .ws-input::placeholder { font-size: 0.8rem; letter-spacing: 0.05em; color: var(--text-muted); }
+  #word-scramble-game .ws-input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,229,255,0.15); }
+
+  #word-scramble-game .ws-history { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: var(--space-4); max-width: 500px; margin-left: auto; margin-right: auto; }
+  #word-scramble-game .ws-hist-item { font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--radius-full); font-family: var(--font-mono); }
+  #word-scramble-game .ws-hist-ok { background: rgba(0,230,118,0.1); color: var(--accent-green); }
+  #word-scramble-game .ws-hist-err { background: rgba(255,82,82,0.1); color: var(--accent-red); }
+
+  #word-scramble-game .ws-actions { text-align: center; margin-top: var(--space-6); }
+  #word-scramble-game .ws-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #word-scramble-game .ws-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #word-scramble-game .ws-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+
+  @media (max-width: 768px) {
+    #word-scramble-game .ws-scrambled { font-size: 2rem; letter-spacing: 0.2em; }
+  }
+</style>

@@ -1,0 +1,122 @@
+---
+import { getCollection } from 'astro:content';
+import type { GameMeta } from '../../types/game';
+import GameLayout from '../../layouts/GameLayout.astro';
+import GameCard from '../../components/shared/GameCard.astro';
+import type { GetStaticPaths } from 'astro';
+// Phase 1: Core games
+import TypingTest from '../../components/games/TypingTest.astro';
+import ReactionTest from '../../components/games/ReactionTest.astro';
+import MemoryTest from '../../components/games/MemoryTest.astro';
+import NumberMemory from '../../components/games/NumberMemory.astro';
+import ColorTest from '../../components/games/ColorTest.astro';
+// Phase 2: Extended games
+import VisualMemory from '../../components/games/VisualMemory.astro';
+import Sudoku from '../../components/games/Sudoku.astro';
+import Minesweeper from '../../components/games/Minesweeper.astro';
+import IQPuzzle from '../../components/games/IQPuzzle.astro';
+import MathChallenge from '../../components/games/MathChallenge.astro';
+import WordScramble from '../../components/games/WordScramble.astro';
+import SequenceMemory from '../../components/games/SequenceMemory.astro';
+import AimTrainer from '../../components/games/AimTrainer.astro';
+import ChimpTest from '../../components/games/ChimpTest.astro';
+import VerbalMemory from '../../components/games/VerbalMemory.astro';
+// Phase 3: Additional games
+import SpeedMath from '../../components/games/SpeedMath.astro';
+import WordSearch from '../../components/games/WordSearch.astro';
+import StroopTest from '../../components/games/StroopTest.astro';
+import DualNBack from '../../components/games/DualNBack.astro';
+import SimonSays from '../../components/games/SimonSays.astro';
+import MentalRotation from '../../components/games/MentalRotation.astro';
+import LogicGrid from '../../components/games/LogicGrid.astro';
+import QuickMath from '../../components/games/QuickMath.astro';
+// Batch 1 new games
+import Game2048 from '../../components/games/Game2048.astro';
+import Wordle from '../../components/games/Wordle.astro';
+import Hangman from '../../components/games/Hangman.astro';
+// Batch 2
+import Puzzle15 from '../../components/games/Puzzle15.astro';
+import TicTacToe from '../../components/games/TicTacToe.astro';
+import ConnectFour from '../../components/games/ConnectFour.astro';
+import TowerOfHanoi from '../../components/games/TowerOfHanoi.astro';
+// Batch 3
+import SpotDifference from '../../components/games/SpotDifference.astro';
+import PatternLock from '../../components/games/PatternLock.astro';
+import CrackTheCode from '../../components/games/CrackTheCode.astro';
+// Batch 4
+import TriviaQuiz from '../../components/games/TriviaQuiz.astro';
+import BallSort from '../../components/games/BallSort.astro';
+import MazeRunner from '../../components/games/MazeRunner.astro';
+import Snake from '../../components/games/Snake.astro';
+import Racing from '../../components/games/Racing.astro';
+import TankBattle from '../../components/games/TankBattle.astro';
+
+const gameComponents: Record<string, any> = {
+  TypingTest, ReactionTest, MemoryTest, NumberMemory, ColorTest,
+  VisualMemory, Sudoku, Minesweeper, IQPuzzle, MathChallenge,
+  WordScramble, SequenceMemory, AimTrainer, ChimpTest, VerbalMemory,
+  SpeedMath, WordSearch, StroopTest, DualNBack, SimonSays,
+  MentalRotation, LogicGrid, QuickMath,
+  Game2048, Wordle, Hangman,
+  Puzzle15, TicTacToe, ConnectFour, TowerOfHanoi,
+  SpotDifference, PatternLock, CrackTheCode,
+  TriviaQuiz, BallSort, MazeRunner, Snake, Racing, TankBattle,
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const games = await getCollection('games');
+  return games.map((game) => ({
+    params: { slug: game.data.slug },
+    props: { game: game.data as GameMeta, allGames: games.map(g => g.data as GameMeta) },
+  }));
+};
+
+const { game, allGames } = Astro.props;
+const GameComponent = gameComponents[game.componentName];
+
+// Find related games
+const relatedGames = game.relatedGames
+  ?.map((slug: string) => allGames.find(g => g.slug === slug))
+  .filter(Boolean) as GameMeta[] || [];
+---
+
+<GameLayout game={game}>
+  <div slot="game">
+    {GameComponent ? (
+      <GameComponent />
+    ) : (
+      <p style="text-align: center; color: var(--text-muted); padding: 2rem;">
+        Game component coming soon...
+      </p>
+    )}
+  </div>
+
+  <div slot="related">
+    {relatedGames.map((g: GameMeta) => (
+      <GameCard game={g} />
+    ))}
+  </div>
+
+  <div slot="content">
+    <h2>About the {game.shortTitle}</h2>
+    <p>
+      The {game.shortTitle} is one of our most popular brain training exercises.
+      Designed to test and improve your cognitive abilities, this game provides
+      instant feedback on your performance.
+    </p>
+    <p>
+      Regular practice with this type of cognitive exercise can help improve
+      your mental processing speed, accuracy, and overall brain health.
+      We recommend practicing for 10-15 minutes daily for the best results.
+    </p>
+    <p>
+      Your scores are saved locally on your device, allowing you to track your
+      progress over time. Challenge yourself to beat your personal best with
+      each attempt!
+    </p>
+  </div>
+
+  <div slot="score">
+    <p style="color: var(--text-muted);">Complete the game to see your score!</p>
+  </div>
+</GameLayout>

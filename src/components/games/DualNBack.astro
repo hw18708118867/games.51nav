@@ -1,0 +1,175 @@
+---
+// DualNBack — working memory training
+// Compare current position & letter with N steps back
+---
+
+<div class="game-container" id="dual-nback-game">
+  <div class="dnb-grid" id="dnb-grid"></div>
+  <div class="dnb-info">
+    <div class="dnb-letter" id="dnb-letter">A</div>
+    <div class="dnb-n-level">N = <span id="dnb-n">1</span> &nbsp;|&nbsp; <span id="dnb-prompt">Remember the position AND letter</span></div>
+  </div>
+
+  <div class="dnb-response" id="dnb-buttons">
+    <button class="game-btn game-btn--secondary" id="dnb-pos-btn">📍 Position</button>
+    <button class="game-btn game-btn--secondary" id="dnb-letter-btn">🔤 Letter</button>
+    <button class="game-btn game-btn--primary" id="dnb-both-btn">Both Match</button>
+    <button class="game-btn game-btn--secondary" id="dnb-none-btn">No Match</button>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="dnb-score-display">0</span><span class="stat-label">Score</span></div>
+    <div class="stat"><span class="stat-value" id="dnb-round-display">0/20</span><span class="stat-label">Trial</span></div>
+    <div class="stat"><span class="stat-value" id="dnb-accuracy-display">0%</span><span class="stat-label">Accuracy</span></div>
+  </div>
+  <div class="dnb-actions">
+    <div class="dnb-difficulty"><button class="game-btn game-btn--secondary dn-diff-btn active" data-diff="easy">Easy (N=1)</button><button class="game-btn game-btn--secondary dn-diff-btn" data-diff="medium">Medium (N=2)</button><button class="game-btn game-btn--secondary dn-diff-btn" data-diff="hard">Hard (N=3)</button></div>
+    <button class="game-btn game-btn--primary" id="dnb-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+  const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'.split('');
+  const TRIALS = 20;
+  const DIFF = { easy: 1, medium: 2, hard: 3 };
+  let diff: keyof typeof DIFF = 'easy', n = DIFF[diff];
+  let history: { pos: number; letter: string }[] = [];
+  let trial = 0, score = 0, correct = 0, responded = 0;
+  let curPos = 0, curLetter = '';
+  let phase: 'show'|'respond' = 'show';
+  let done = false, over = false;
+
+  const gridEl = document.getElementById('dnb-grid')!;
+  const letterEl = document.getElementById('dnb-letter')!;
+  const promptEl = document.getElementById('dnb-prompt')!;
+  const nEl = document.getElementById('dnb-n')!;
+  const sEl = document.getElementById('dnb-score-display')!;
+  const rEl = document.getElementById('dnb-round-display')!;
+  const aEl = document.getElementById('dnb-accuracy-display')!;
+
+  function renderGrid(hl: number): void {
+    gridEl.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'dnb-cell';
+      if (i === hl) cell.classList.add('active');
+      gridEl.appendChild(cell);
+    }
+  }
+
+  function next(): void {
+    if (trial >= TRIALS) { finish(); return; }
+    trial++; done = false; phase = 'show';
+    curPos = Math.floor(Math.random() * 9);
+    curLetter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+
+    // Show the stimulus
+    renderGrid(curPos);
+    letterEl.textContent = curLetter;
+    letterEl.style.color = 'var(--accent-purple)';
+    promptEl.textContent = 'Remember the position AND letter';
+
+    // First N trials: auto-answer (no history to compare)
+    if (trial <= n) {
+      history.push({ pos: curPos, letter: curLetter });
+      update();
+      setTimeout(() => next(), 1500);
+      return;
+    }
+
+    // After 2s, hide and ask
+    setTimeout(() => {
+      phase = 'respond';
+      renderGrid(-1);
+      letterEl.textContent = '?';
+      letterEl.style.color = 'var(--text-muted)';
+      promptEl.textContent = `Compare with ${n} step(s) ago — tap a button`;
+    }, 2000);
+  }
+
+  function respond(type: string): void {
+    if (phase !== 'respond' || done || over) return;
+    done = true; responded++;
+
+    const nBack = history[history.length - n];
+    const posMatch = nBack.pos === curPos;
+    const letterMatch = nBack.letter === curLetter;
+    const correctAnswer = posMatch && letterMatch ? 'both' : posMatch ? 'pos' : letterMatch ? 'letter' : 'none';
+    const isCorrect = type === correctAnswer;
+
+    if (isCorrect) { correct++; score += 10; }
+
+    // Flash feedback
+    if (isCorrect) {
+      letterEl.textContent = '✓';
+      letterEl.style.color = 'var(--accent-green)';
+      promptEl.textContent = 'Correct!';
+    } else {
+      letterEl.textContent = '✗';
+      letterEl.style.color = 'var(--accent-red)';
+      promptEl.textContent = `Should be: ${correctAnswer}`;
+      document.getElementById(`dnb-${correctAnswer}-btn`)?.classList.add('dnb-highlight');
+      setTimeout(() => document.getElementById(`dnb-${correctAnswer}-btn`)?.classList.remove('dnb-highlight'), 600);
+    }
+
+    history.push({ pos: curPos, letter: curLetter });
+    update();
+    setTimeout(() => { letterEl.style.color = 'var(--accent-purple)'; next(); }, 700);
+  }
+
+  function update(): void {
+    sEl.textContent = String(score);
+    rEl.textContent = `${Math.min(trial, TRIALS)}/${TRIALS}`;
+    aEl.textContent = responded > 0 ? `${Math.round((correct / responded) * 100)}%` : '0%';
+  }
+
+  function finish(): void {
+    over = true;
+    saveScore('dual-n-back', score);
+    letterEl.textContent = 'Done!';
+    letterEl.style.color = 'var(--text-primary)';
+    promptEl.textContent = '';
+    (window as any).__gameFeedback?.({ type: score >= 100 ? 'win' : 'lose', title: score >= 100 ? 'Sharp Mind!' : 'Test Complete', score: `${score} pts`, detail: `${Math.round((correct / Math.max(1,responded)) * 100)}% accuracy · N=${n}` });
+  }
+
+  function init(): void {
+    n = DIFF[diff]; history = []; trial = 0; score = 0; correct = 0; responded = 0; over = false;
+    nEl.textContent = String(n);
+    letterEl.style.color = 'var(--accent-purple)';
+    promptEl.textContent = 'Remember the position AND letter';
+    update(); next();
+  }
+
+  document.getElementById('dnb-pos-btn')!.addEventListener('click', () => respond('pos'));
+  document.getElementById('dnb-letter-btn')!.addEventListener('click', () => respond('letter'));
+  document.getElementById('dnb-both-btn')!.addEventListener('click', () => respond('both'));
+  document.getElementById('dnb-none-btn')!.addEventListener('click', () => respond('none'));
+
+  document.querySelectorAll('.dn-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.dn-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('dnb-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #dual-nback-game .dnb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 240px; margin: 0 auto var(--space-4); }
+  #dual-nback-game .dnb-cell { aspect-ratio: 1; background: var(--bg-tertiary); border: 2px solid var(--border-subtle); border-radius: var(--radius-sm); transition: all .15s; }
+  #dual-nback-game .dnb-cell.active { background: var(--accent-cyan); border-color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0,229,255,.4); }
+  #dual-nback-game .dnb-info { text-align: center; margin-bottom: var(--space-4); }
+  #dual-nback-game .dnb-letter { font-family: var(--font-mono); font-size: 3rem; font-weight: 700; color: var(--accent-purple); transition: color .2s; }
+  #dual-nback-game .dnb-n-level { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-1); }
+  #dual-nback-game .dnb-response { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; margin-bottom: var(--space-4); }
+  #dual-nback-game .dnb-response .game-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #dual-nback-game .dnb-highlight { border-color: var(--accent-green) !important; box-shadow: 0 0 12px rgba(0,230,118,.4) !important; }
+  #dual-nback-game .dnb-actions { text-align: center; margin-top: var(--space-4); }
+  #dual-nback-game .dnb-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #dual-nback-game .dn-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #dual-nback-game .dn-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

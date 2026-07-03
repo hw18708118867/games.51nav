@@ -1,0 +1,93 @@
+---
+// AnimatedLogo — brain icon with subtle pulse + gradient animation
+// Replaces the static emoji in the header
+---
+<a href="/" class="animated-logo" aria-label="Brain Games Hub — Home">
+  <svg class="logo-svg" viewBox="0 0 160 160" width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="lg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#00E5FF">
+          <animate attributeName="stop-color" values="#00E5FF;#7C4DFF;#00E5FF" dur="4s" repeatCount="indefinite"/>
+        </stop>
+        <stop offset="50%" stop-color="#448AFF">
+          <animate attributeName="stop-color" values="#448AFF;#00E5FF;#448AFF" dur="4s" repeatCount="indefinite"/>
+        </stop>
+        <stop offset="100%" stop-color="#7C4DFF">
+          <animate attributeName="stop-color" values="#7C4DFF;#448AFF;#7C4DFF" dur="4s" repeatCount="indefinite"/>
+        </stop>
+      </linearGradient>
+      <filter id="lg-glow">
+        <feGaussianBlur stdDeviation="2" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <rect width="160" height="160" rx="32" fill="#0a0a0f"/>
+
+    <!-- Glow ring -->
+    <circle cx="80" cy="78" r="50" fill="none" stroke="url(#lg-grad)" stroke-width="2" opacity="0.5">
+      <animate attributeName="r" values="50;54;50" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+      <animate attributeName="opacity" values="0.5;0.2;0.5" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+    </circle>
+
+    <!-- Brain shape -->
+    <g filter="url(#lg-glow)">
+      <path d="M 80 30 C 60 30, 40 44, 40 62 C 40 70, 44 78, 46 82 C 44 84, 42 88, 42 92 C 42 100, 48 108, 56 108 C 58 108, 60 107, 62 106 C 66 112, 72 116, 80 116" fill="none" stroke="url(#lg-grad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 80 30 C 100 30, 120 44, 120 62 C 120 70, 116 78, 114 82 C 116 84, 118 88, 118 92 C 118 100, 112 108, 104 108 C 102 108, 100 107, 98 106 C 94 112, 88 116, 80 116" fill="none" stroke="url(#lg-grad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 80 34 C 78 52, 82 72, 80 100" fill="none" stroke="url(#lg-grad)" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+
+      <!-- Gyri -->
+      <path d="M 44 62 C 50 58, 54 62, 50 68" fill="none" stroke="url(#lg-grad)" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      <path d="M 46 80 C 52 78, 54 82, 50 86" fill="none" stroke="url(#lg-grad)" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      <path d="M 116 62 C 110 58, 106 62, 110 68" fill="none" stroke="url(#lg-grad)" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      <path d="M 114 80 C 108 78, 106 82, 110 86" fill="none" stroke="url(#lg-grad)" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+
+      <!-- Synapse dots -->
+      <circle cx="48" cy="52" r="2.5" fill="#00E5FF">
+        <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+      </circle>
+      <circle cx="112" cy="52" r="2.5" fill="#7C4DFF">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+      </circle>
+    </g>
+  </svg>
+  <span class="logo-text gradient-text">Brain Games Hub</span>
+</a>
+
+<style>
+  .animated-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-xl);
+    z-index: 101;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animated-logo:hover {
+    transform: scale(1.05);
+  }
+
+  .animated-logo:hover .logo-svg {
+    filter: drop-shadow(0 0 12px rgba(0, 229, 255, 0.4));
+  }
+
+  .logo-svg {
+    transition: filter 0.3s ease;
+  }
+
+  .logo-text {
+    transition: text-shadow 0.3s ease;
+  }
+
+  .animated-logo:hover .logo-text {
+    text-shadow: 0 0 20px rgba(124, 77, 255, 0.3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .logo-svg *[dur] { animation: none !important; }
+  }
+</style>

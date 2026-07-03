@@ -1,0 +1,207 @@
+---
+// VerbalMemory — word recognition with difficulty
+---
+
+<div class="game-container" id="verbal-memory-game">
+  <div class="verbal-display">
+    <div class="verbal-word" id="verbal-word">Ready?</div>
+    <div class="verbal-feedback" id="verbal-fb"></div>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="verbal-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="verbal-lives-display">3</span>
+      <span class="stat-label">Lives</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="verbal-words-display">0</span>
+      <span class="stat-label">Words</span>
+    </div>
+  </div>
+
+  <div class="verbal-buttons">
+    <button class="game-btn game-btn--secondary" id="verbal-new-btn">NEW</button>
+    <button class="game-btn game-btn--primary" id="verbal-seen-btn">SEEN</button>
+  </div>
+
+  <div class="verbal-actions">
+    <div class="verbal-difficulty">
+      <button class="game-btn game-btn--secondary vm-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary vm-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary vm-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="verbal-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const WORDS = [
+    'apple','bridge','castle','dragon','eagle','forest','garden','harbor','island','jungle',
+    'knight','lemon','mountain','needle','ocean','palace','queen','river','storm','tower',
+    'valley','window','anchor','breeze','candle','desert','emerald','fountain','galaxy','horizon',
+    'ivory','jewel','lantern','meadow','nebula','orchid','pearl','quartz','rainbow','silver',
+    'thunder','umbrella','violet','whisper','zenith','autumn','blossom','crystal','diamond','echo',
+    'flame','glacier','harvest','illusion','journey','kiwi','lotus','mirage','nectar','oasis',
+    'phoenix','ripple','shadow','tempest','unity','velvet','wonder','zephyr','amber','bloom',
+    'copper','marble','velvet','cotton','timber','gravel','coral','bronze','pebble','willow',
+    'falcon','rabbit','turtle','parrot','salmon','badger','ferret','weasel','beaver','otter',
+    'planet','comet','meteor','saturn','jupiter','nebula','quasar','pulsar','cosmic','lunar',
+    'violin','guitar','flute','piano','cello','trumpet','drum','harp','organ','sax',
+    'coffee','spice','honey','sugar','pepper','ginger','vanilla','cinnamon','nutmeg','basil',
+    'velvet','denim','cotton','linen','satin','nylon','fleece','wool','silk','lace',
+    'pirate','wizard','ninja','robot','ghost','angel','fairy','giant','dwarf','elf',
+    'tulip','daisy','lily','rose','lotus','iris','poppy','heather','lilac','jasmine',
+    'copper','bronze','silver','gold','platinum','mercury','helium','carbon','oxygen','sulfur',
+    'canyon','glacier','reef','lagoon','prairie','tundra','savanna','plateau','estuary','delta',
+    'anvil','chisel','mallet','scythe','pliers','wrench','compass','ladder','pulley','wedge',
+    'velvet','mosaic','canvas','fresco','marble','bronze','copper','granite','quartz','slate',
+  ];
+
+  const DIFF = { easy: { lives: 3, repeat: 0.4 }, medium: { lives: 3, repeat: 0.5 }, hard: { lives: 2, repeat: 0.6 } };
+
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let seen: Set<string> = new Set();
+  let currentWord = '';
+  let score = 0, lives = cfg.lives;
+  let over = false;
+
+  const wordEl = document.getElementById('verbal-word')!;
+  const fbEl = document.getElementById('verbal-fb')!;
+  const scoreEl = document.getElementById('verbal-score-display')!;
+  const livesEl = document.getElementById('verbal-lives-display')!;
+  const wordsEl = document.getElementById('verbal-words-display')!;
+
+  function getWord(): string {
+    // Dynamic repeat rate: very low early, gradually increases
+    const seenRatio = seen.size / WORDS.length;
+    const repeatChance = Math.min(0.5, seenRatio * 1.5 + cfg.repeat * 0.3);
+
+    const unseen = WORDS.filter(w => !seen.has(w));
+    if (seen.size > 5 && unseen.length > 0 && Math.random() < repeatChance) {
+      const arr = Array.from(seen);
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+    if (unseen.length > 0) return unseen[Math.floor(Math.random() * unseen.length)];
+    return WORDS[Math.floor(Math.random() * WORDS.length)];
+  }
+
+  function show(): void {
+    currentWord = getWord();
+    wordEl.textContent = currentWord;
+    wordEl.classList.remove('vm-pop');
+    void wordEl.offsetWidth;
+    wordEl.classList.add('vm-pop');
+  }
+
+  function answer(isSeen: boolean): void {
+    if (over) return;
+    const wasSeen = seen.has(currentWord);
+
+    if (isSeen === wasSeen) {
+      score++;
+      if (!wasSeen) seen.add(currentWord);
+      fbEl.textContent = '✓';
+      fbEl.className = 'verbal-feedback vm-ok';
+    } else {
+      lives--;
+      fbEl.textContent = '✗';
+      fbEl.className = 'verbal-feedback vm-err';
+      wordEl.classList.add('vm-shake');
+      setTimeout(() => wordEl.classList.remove('vm-shake'), 400);
+      if (lives <= 0) { update(); finish(); return; }
+    }
+    setTimeout(() => { fbEl.className = 'verbal-feedback'; }, 500);
+    update();
+    show();
+  }
+
+  function update(): void {
+    scoreEl.textContent = String(score);
+    livesEl.textContent = String(lives);
+    wordsEl.textContent = String(seen.size);
+  }
+
+  function finish(): void {
+    over = true;
+    saveScore('verbal-memory', score);
+    wordEl.textContent = `Game Over! Score: ${score}`;
+    wordEl.style.color = 'var(--accent-orange)';
+    (window as any).__gameFeedback?.({
+      type: score >= 30 ? 'win' : 'lose',
+      title: score >= 30 ? 'Great Memory!' : 'Game Over',
+      score: `${score} pts`,
+      detail: `${seen.size} words · ${difficulty}`,
+    });
+  }
+
+  function init(): void {
+    cfg = DIFF[difficulty];
+    seen = new Set(); score = 0; lives = cfg.lives; over = false;
+    wordEl.style.color = 'var(--text-primary)';
+    update(); show();
+  }
+
+  document.getElementById('verbal-new-btn')!.addEventListener('click', () => answer(false));
+  document.getElementById('verbal-seen-btn')!.addEventListener('click', () => answer(true));
+
+  document.addEventListener('keydown', e => {
+    const el = document.getElementById('verbal-memory-game');
+    if (!el || !el.contains(document.activeElement) && document.activeElement !== document.body) return;
+    if (e.key === 'ArrowLeft') answer(false);
+    if (e.key === 'ArrowRight') answer(true);
+  });
+
+  document.querySelectorAll('.vm-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.vm-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('verbal-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #verbal-memory-game .verbal-display {
+    text-align: center; min-height: 140px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: var(--space-2);
+  }
+  #verbal-memory-game .verbal-word {
+    font-family: var(--font-display); font-size: 3rem; font-weight: 700;
+    color: var(--text-primary); text-transform: capitalize;
+  }
+  #verbal-memory-game .verbal-word.vm-pop { animation: vm-pop 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes vm-pop { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+  #verbal-memory-game .verbal-word.vm-shake { animation: vm-shake 0.4s ease; }
+  @keyframes vm-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+
+  #verbal-memory-game .verbal-feedback {
+    font-size: 1.5rem; font-weight: 700; min-height: 30px; opacity: 0; transition: opacity 0.2s;
+  }
+  #verbal-memory-game .verbal-feedback.vm-ok { color: var(--accent-green); opacity: 1; animation: vm-fb-pop 0.3s ease; }
+  #verbal-memory-game .verbal-feedback.vm-err { color: var(--accent-red); opacity: 1; animation: vm-fb-pop 0.3s ease; }
+  @keyframes vm-fb-pop { 0%{transform:scale(0.5)} 100%{transform:scale(1)} }
+
+  #verbal-memory-game .verbal-buttons {
+    display: flex; gap: var(--space-4); justify-content: center; margin: var(--space-4) 0;
+  }
+  #verbal-memory-game .verbal-buttons .game-btn { min-width: 140px; font-size: var(--text-lg); padding: var(--space-4) var(--space-8); }
+  #verbal-memory-game .verbal-actions { text-align: center; margin-top: var(--space-4); }
+  #verbal-memory-game .verbal-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #verbal-memory-game .vm-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #verbal-memory-game .vm-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+
+  @media (max-width: 768px) {
+    #verbal-memory-game .verbal-word { font-size: 2rem; }
+    #verbal-memory-game .verbal-buttons .game-btn { min-width: 120px; }
+  }
+</style>

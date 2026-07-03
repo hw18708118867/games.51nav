@@ -1,0 +1,179 @@
+---
+// ChimpTest — remember number positions with difficulty
+---
+
+<div class="game-container" id="chimp-test-game">
+  <div class="chimp-grid" id="chimp-grid"></div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="chimp-round-display">1</span>
+      <span class="stat-label">Round</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="chimp-numbers-display">4</span>
+      <span class="stat-label">Numbers</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="chimp-errors-display">0</span>
+      <span class="stat-label">Errors</span>
+    </div>
+  </div>
+
+  <div class="chimp-actions">
+    <div class="chimp-difficulty">
+      <button class="game-btn game-btn--secondary chimp-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary chimp-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary chimp-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="chimp-restart-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const SIZE = 5;
+  const DIFF = { easy: { showMs: 800, maxErrors: 5 }, medium: { showMs: 500, maxErrors: 3 }, hard: { showMs: 300, maxErrors: 2 } };
+
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let round = 1, count = 4, errors = 0;
+  let numbers: { pos: number; value: number }[] = [];
+  let next = 1;
+  let phase: 'show' | 'input' = 'show';
+  let over = false;
+
+  const grid = document.getElementById('chimp-grid')!;
+  const roundEl = document.getElementById('chimp-round-display')!;
+  const numsEl = document.getElementById('chimp-numbers-display')!;
+  const errsEl = document.getElementById('chimp-errors-display')!;
+
+  function gen(): void {
+    const positions: number[] = [];
+    while (positions.length < count) {
+      const p = Math.floor(Math.random() * SIZE * SIZE);
+      if (!positions.includes(p)) positions.push(p);
+    }
+    numbers = positions.map((pos, i) => ({ pos, value: i + 1 }));
+  }
+
+  function render(reveal = false): void {
+    grid.innerHTML = '';
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'chimp-cell';
+      const num = numbers.find(n => n.pos === i);
+      if (num && reveal) {
+        cell.textContent = String(num.value);
+        cell.classList.add('revealed');
+      }
+      if (num && phase === 'input') cell.classList.add('clickable');
+      cell.addEventListener('click', () => click(i));
+      grid.appendChild(cell);
+    }
+  }
+
+  function click(i: number): void {
+    if (phase !== 'input' || over) return;
+    const num = numbers.find(n => n.pos === i);
+    if (!num) return;
+
+    const cell = grid.children[i] as HTMLElement;
+
+    if (num.value === next) {
+      cell.textContent = String(num.value);
+      cell.classList.add('clicked');
+      next++;
+
+      if (next > count) {
+        round++;
+        count = Math.min(40, count + 1);
+        update();
+        if (errors >= cfg.maxErrors) finish();
+        else nextRound();
+      }
+    } else {
+      errors++;
+      cell.classList.add('error');
+      setTimeout(() => cell.classList.remove('error'), 400);
+      update();
+      if (errors >= cfg.maxErrors) finish();
+    }
+  }
+
+  function nextRound(): void {
+    next = 1; phase = 'show';
+    gen(); render(true);
+    setTimeout(() => { phase = 'input'; render(false); }, cfg.showMs * count);
+  }
+
+  function update(): void {
+    roundEl.textContent = String(round);
+    numsEl.textContent = String(count - 1);
+    errsEl.textContent = `${errors}/${cfg.maxErrors}`;
+  }
+
+  function finish(): void {
+    over = true;
+    const maxNums = count - 1;
+    saveScore('chimp-test', maxNums);
+    (window as any).__gameFeedback?.({
+      type: maxNums >= 10 ? 'win' : 'lose',
+      title: maxNums >= 10 ? 'Amazing Memory!' : 'Test Complete',
+      score: `${maxNums} numbers`,
+      detail: `Round ${round} · ${difficulty} · ${errors} errors`,
+    });
+  }
+
+  function init(): void {
+    cfg = DIFF[difficulty];
+    round = 1; count = 4; errors = 0; next = 1; over = false;
+    update(); nextRound();
+  }
+
+  document.querySelectorAll('.chimp-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.chimp-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('chimp-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #chimp-test-game .chimp-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    max-width: 400px; margin: 0 auto;
+  }
+  #chimp-test-game .chimp-cell {
+    aspect-ratio: 1; background: var(--bg-tertiary); border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 1.5rem; font-weight: 700;
+    color: var(--text-primary); cursor: default; transition: all 0.2s;
+  }
+  #chimp-test-game .chimp-cell.revealed {
+    background: rgba(0,229,255,0.1); border-color: var(--accent-cyan); color: var(--accent-cyan);
+    animation: chimp-pop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes chimp-pop { 0%{transform:scale(0);opacity:0} 100%{transform:scale(1);opacity:1} }
+  #chimp-test-game .chimp-cell.clickable { cursor: pointer; }
+  #chimp-test-game .chimp-cell.clickable:hover { border-color: var(--accent-purple); background: var(--bg-hover); transform: scale(1.05); }
+  #chimp-test-game .chimp-cell.clicked {
+    background: rgba(0,230,118,0.15); border-color: var(--accent-green); color: var(--accent-green);
+    cursor: default; animation: chimp-ok 0.3s ease;
+  }
+  @keyframes chimp-ok { 0%{transform:scale(1)} 50%{transform:scale(1.2)} 100%{transform:scale(1)} }
+  #chimp-test-game .chimp-cell.error {
+    background: rgba(255,82,82,0.2) !important; border-color: var(--accent-red) !important;
+    animation: chimp-err 0.4s ease;
+  }
+  @keyframes chimp-err { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+  #chimp-test-game .chimp-actions { text-align: center; margin-top: var(--space-6); }
+  #chimp-test-game .chimp-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #chimp-test-game .chimp-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #chimp-test-game .chimp-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

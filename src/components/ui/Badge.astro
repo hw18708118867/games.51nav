@@ -1,0 +1,12 @@
+---
+interface Props {
+  variant?: 'easy' | 'medium' | 'hard' | 'variable';
+  class?: string;
+}
+
+const { variant = 'variable', class: className = '' } = Astro.props;
+---
+
+<span class:list={['badge', `badge--${variant}`, className]}>
+  <slot />
+</span>

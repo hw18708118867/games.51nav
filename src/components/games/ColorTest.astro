@@ -1,0 +1,256 @@
+---
+// ColorTest — color perception challenge
+---
+
+<div class="game-container" id="color-test-game">
+  <div class="color-display">
+    <div class="color-target" id="color-target">
+      <span class="color-label">Match this color</span>
+    </div>
+    <div class="color-options" id="color-options"></div>
+  </div>
+
+  <div class="game-stats" id="color-stats">
+    <div class="stat">
+      <span class="stat-value" id="color-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="color-round-display">1/10</span>
+      <span class="stat-label">Round</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="color-accuracy-display">0%</span>
+      <span class="stat-label">Accuracy</span>
+    </div>
+  </div>
+
+  <div class="color-actions">
+    <button class="game-btn game-btn--primary" id="color-restart-btn">New Game</button>
+  </div>
+
+  <div id="color-result" class="color-result" style="display: none;">
+    <div class="result-content">
+      <h3>Test Complete!</h3>
+      <div class="result-stats">
+        <div class="result-stat">
+          <span class="result-stat-value" id="final-score">0</span>
+          <span class="result-stat-label">Score</span>
+        </div>
+        <div class="result-stat">
+          <span class="result-stat-value" id="final-accuracy">0%</span>
+          <span class="result-stat-label">Accuracy</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const TOTAL = 10;
+  const OPTIONS = 6;
+
+  let round = 0;
+  let score = 0;
+  let correct = 0;
+  let targetColor = '';
+  let finished = false;
+
+  const targetEl = document.getElementById('color-target')!;
+  const optionsEl = document.getElementById('color-options')!;
+  const scoreEl = document.getElementById('color-score-display')!;
+  const roundEl = document.getElementById('color-round-display')!;
+  const accEl = document.getElementById('color-accuracy-display')!;
+  const resultDiv = document.getElementById('color-result')!;
+
+  function randHsl(): string {
+    const h = Math.floor(Math.random() * 360);
+    const s = 50 + Math.floor(Math.random() * 40);
+    const l = 35 + Math.floor(Math.random() * 25);
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  }
+
+  function similarColors(base: string, count: number): string[] {
+    const m = base.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+    if (!m) return [base];
+    const h = parseInt(m[1]), s = parseInt(m[2]), l = parseInt(m[3]);
+    const colors: string[] = [];
+    while (colors.length < count) {
+      const dh = Math.round((Math.random() - 0.5) * 40);
+      const ds = Math.round((Math.random() - 0.5) * 20);
+      const dl = Math.round((Math.random() - 0.5) * 14);
+      const c = `hsl(${(h + dh + 360) % 360}, ${Math.min(100, Math.max(20, s + ds))}%, ${Math.min(80, Math.max(15, l + dl))}%)`;
+      if (!colors.includes(c) && c !== base) colors.push(c);
+    }
+    return colors;
+  }
+
+  function shuffle<T>(a: T[]): T[] {
+    const arr = [...a];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function render(): void {
+    if (round > TOTAL) { finish(); return; }
+    targetColor = randHsl();
+    targetEl.style.backgroundColor = targetColor;
+    targetEl.querySelector('.color-label')!.textContent = `Round ${round} / ${TOTAL}`;
+
+    const opts = shuffle([targetColor, ...similarColors(targetColor, OPTIONS - 1)]);
+    optionsEl.innerHTML = '';
+    opts.forEach(c => {
+      const tile = document.createElement('button');
+      tile.className = 'color-tile';
+      tile.setAttribute('type', 'button');
+      tile.style.backgroundColor = c;
+      tile.addEventListener('click', () => handle(c));
+      optionsEl.appendChild(tile);
+    });
+  }
+
+  function handle(color: string): void {
+    if (finished) return;
+    if (color === targetColor) { correct++; score += 10; }
+    else { score = Math.max(0, score - 5); }
+    round++;
+    update();
+    setTimeout(render, 400);
+  }
+
+  function update(): void {
+    scoreEl.textContent = String(score);
+    roundEl.textContent = `${Math.min(round, TOTAL)}/${TOTAL}`;
+    accEl.textContent = round > 0 ? `${Math.round((correct / Math.min(round, TOTAL)) * 100)}%` : '0%';
+  }
+
+  function finish(): void {
+    finished = true;
+    const acc = Math.round((correct / TOTAL) * 100);
+    saveScore('color-test', score);
+    document.getElementById('final-score')!.textContent = String(score);
+    document.getElementById('final-accuracy')!.textContent = `${acc}%`;
+    resultDiv.style.display = 'block';
+    (window as any).__gameFeedback?.({
+      type: acc >= 70 ? 'win' : 'lose',
+      title: acc >= 70 ? 'Sharp Eyes!' : 'Test Complete',
+      score: `${acc}%`,
+      detail: `Score: ${score} · ${correct}/${TOTAL} correct`,
+    });
+  }
+
+  function init(): void {
+    round = 1; score = 0; correct = 0; finished = false;
+    resultDiv.style.display = 'none';
+    update(); render();
+  }
+
+  document.getElementById('color-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #color-test-game .color-display { text-align: center; }
+
+  #color-test-game .color-target {
+    width: 140px; height: 140px;
+    border-radius: var(--radius-lg);
+    margin: 0 auto var(--space-6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border-medium);
+    transition: box-shadow 0.3s ease;
+  }
+
+  #color-test-game .color-label {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.3);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+  }
+
+  #color-test-game .color-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  #color-test-game .color-tile {
+    aspect-ratio: 1;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    border: 2px solid var(--border-medium);
+    transition: all 0.2s ease;
+    padding: 0;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #color-test-game .color-tile:hover {
+    transform: scale(1.06);
+    border-color: #fff;
+    box-shadow: 0 0 16px rgba(255,255,255,0.15);
+    z-index: 1;
+  }
+
+  #color-test-game .color-tile:active { transform: scale(0.95); }
+
+  #color-test-game .color-actions { text-align: center; margin-top: var(--space-6); }
+
+  #color-test-game .color-result {
+    margin-top: var(--space-6);
+    animation: fadeIn 0.5s ease;
+  }
+
+  #color-test-game .color-result .result-content {
+    text-align: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+  }
+
+  #color-test-game .color-result .result-content h3 {
+    font-size: var(--text-2xl);
+    margin-bottom: var(--space-4);
+    color: var(--accent-green);
+  }
+
+  #color-test-game .color-result .result-stats {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-12);
+  }
+
+  #color-test-game .color-result .result-stat { text-align: center; }
+
+  #color-test-game .color-result .result-stat-value {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+  }
+
+  #color-test-game .result-stat-label {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 480px) {
+    #color-test-game .color-options { gap: 8px; }
+    #color-test-game .color-target { width: 110px; height: 110px; }
+  }
+</style>

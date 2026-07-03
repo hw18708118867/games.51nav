@@ -1,0 +1,245 @@
+---
+// TankBattle — top-down tank shooter
+---
+
+<div class="game-container" id="tank-game">
+  <canvas id="tk-canvas" class="tk-canvas"></canvas>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="tk-score">0</span><span class="stat-label">Score</span></div>
+    <div class="stat"><span class="stat-value" id="tk-wave">1</span><span class="stat-label">Wave</span></div>
+    <div class="stat"><span class="stat-value" id="tk-lives">3</span><span class="stat-label">Lives</span></div>
+  </div>
+  <div class="tk-actions">
+    <div class="tk-difficulty"><button class="game-btn game-btn--secondary tk-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary tk-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary tk-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="tk-restart">New Game</button>
+  </div>
+  <p class="tk-hint">WASD/↑↓←→ move · Click/Space shoot · P pause</p>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = { easy: { enemiesPerWave: 3, enemySpeed: 1, enemyShootRate: 120, lives: 5 }, medium: { enemiesPerWave: 5, enemySpeed: 1.5, enemyShootRate: 80, lives: 3 }, hard: { enemiesPerWave: 7, enemySpeed: 2, enemyShootRate: 50, lives: 2 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  const canvas = document.getElementById('tk-canvas') as HTMLCanvasElement, ctx = canvas.getContext('2d')!;
+  let W = 600, H = 500, cell = 30, cols = 20, rows = 16;
+  const KEYS = new Set<string>();
+  let player = { x: 300, y: 400, angle: -Math.PI / 2, speed: 3, shootCd: 0, shield: 0 };
+  let bullets: number[][] = [], eBullets: number[][] = [], enemies: any[] = [], particles: number[][] = [];
+  let walls: boolean[][] = [];
+  let score = 0, wave = 1, lives = 5, enemiesLeft = 0;
+  let over = false, running = false, paused = false, loopId = 0, tick = 0, readyCount = 3;
+  let mouseX = 0, mouseY = 0;
+  const sEl = document.getElementById('tk-score')!, wEl = document.getElementById('tk-wave')!, lEl = document.getElementById('tk-lives')!;
+
+  function resize(): void {
+    const r = canvas.parentElement!.getBoundingClientRect();
+    const s = Math.min(600, r.width - 32);
+    W = s; H = Math.floor(s * 0.83);
+    canvas.width = W; canvas.height = H;
+    cell = W / cols;
+    player.x = Math.floor(cols / 2) * cell + cell / 2; player.y = (rows - 2) * cell + cell / 2;
+  }
+
+  function initWalls(): void {
+    walls = Array.from({ length: rows }, () => Array(cols).fill(false));
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) walls[r][c] = true;
+      else if (Math.random() < 0.12) walls[r][c] = true;
+    }
+    // Clear player/enemy spawn areas (larger clear zones)
+    for (let r = rows - 4; r < rows; r++) for (let c = Math.floor(cols / 2) - 3; c < Math.floor(cols / 2) + 3; c++) walls[r][c] = false;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) walls[r][c] = false;
+    for (let r = 0; r < 3; r++) for (let c = cols - 3; c < cols; c++) walls[r][c] = false;
+  }
+
+  function spawnEnemies(): void {
+    enemies = [];
+    enemiesLeft = cfg.enemiesPerWave + wave;
+    for (let i = 0; i < enemiesLeft; i++) {
+      let ex = 0, ey = 0;
+      do { ex = Math.floor(Math.random() * (cols - 4)) + 2; ey = Math.floor(Math.random() * 3) + 1; } while (walls[ey][ex]);
+      enemies.push({ x: ex * cell + cell / 2, y: ey * cell + cell / 2, angle: Math.PI / 2, speed: cfg.enemySpeed, shootCd: 30 + Math.random() * 60, hp: 1 + Math.floor(wave / 3) });
+    }
+  }
+
+  function pfx(x: number, y: number, color: string, n: number): void {
+    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 4; particles.push([x, y, Math.cos(a) * s, Math.sin(a) * s, 10 + Math.random() * 15, color, 2 + Math.random() * 3]); }
+  }
+
+  function wallAt(px: number, py: number): boolean {
+    const c = Math.floor(px / cell), r = Math.floor(py / cell);
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
+    return walls[r][c];
+  }
+
+  function update(): void {
+    if (!running || over || paused) return;
+    tick++;
+    if (readyCount > 0) { if (tick % 50 === 0) readyCount--; return; }
+
+    // Player movement
+    let dx = 0, dy = 0;
+    if (KEYS.has('KeyW') || KEYS.has('ArrowUp')) dy = -1;
+    if (KEYS.has('KeyS') || KEYS.has('ArrowDown')) dy = 1;
+    if (KEYS.has('KeyA') || KEYS.has('ArrowLeft')) dx = -1;
+    if (KEYS.has('KeyD') || KEYS.has('ArrowRight')) dx = 1;
+    if (dx || dy) { const len = Math.sqrt(dx * dx + dy * dy); player.angle = Math.atan2(dy, dx); }
+    const nx = player.x + dx * player.speed, ny = player.y + dy * player.speed;
+    const blocked = wallAt(nx - 9, ny - 9) || wallAt(nx + 9, ny - 9) || wallAt(nx - 9, ny + 9) || wallAt(nx + 9, ny + 9);
+    if (!blocked) { player.x = nx; player.y = ny; }
+    player.x = Math.max(10, Math.min(W - 10, player.x)); player.y = Math.max(10, Math.min(H - 10, player.y));
+    if (player.shootCd > 0) player.shootCd--;
+    if (player.shield > 0) player.shield--;
+
+    // Auto-aim + shoot
+    if (KEYS.has('Space') || KEYS.has('KeyJ')) { if (player.shootCd <= 0) { player.shootCd = 15; (window as any).__tkMuzzle = true; setTimeout(() => (window as any).__tkMuzzle = false, 100); bullets.push([player.x, player.y, Math.cos(player.angle) * 6, Math.sin(player.angle) * 6, 1]); } }
+
+    // Player bullets
+    for (let i = bullets.length - 1; i >= 0; i--) { const b = bullets[i]; b[0] += b[2]; b[1] += b[3]; if (wallAt(b[0], b[1])) { pfx(b[0], b[1], '#FFD740', 5); bullets.splice(i, 1); const c = Math.floor(b[0] / cell), r = Math.floor(b[1] / cell); if (r >= 0 && r < rows && c >= 0 && c < cols && walls[r][c] && r > 0 && r < rows - 1 && c > 0 && c < cols - 1) walls[r][c] = false; continue; } if (b[0] < 0 || b[0] > W || b[1] < 0 || b[1] > H) { bullets.splice(i, 1); continue; }
+      for (let j = enemies.length - 1; j >= 0; j--) { const e = enemies[j]; if (Math.hypot(b[0] - e.x, b[1] - e.y) < 14) { e.hp -= b[4]; bullets.splice(i, 1); pfx(b[0], b[1], '#FFD740', 4); if (e.hp <= 0) { pfx(e.x, e.y, '#FF9100', 15); pfx(e.x, e.y, '#FFD740', 8); enemies.splice(j, 1); score += 10 + wave * 5; sEl.textContent = String(score); enemiesLeft--; if (enemiesLeft <= 0) nextWave(); } break; } } }
+
+    // Enemy bullets
+    for (let i = eBullets.length - 1; i >= 0; i--) { const b = eBullets[i]; b[0] += b[2]; b[1] += b[3]; if (wallAt(b[0], b[1])) { pfx(b[0], b[1], '#FFD740', 3); eBullets.splice(i, 1); continue; } if (b[0] < 0 || b[0] > W || b[1] < 0 || b[1] > H) { eBullets.splice(i, 1); continue; }
+      if (player.shield <= 0 && Math.hypot(b[0] - player.x, b[1] - player.y) < 12) { eBullets.splice(i, 1); pfx(player.x, player.y, '#FF5252', 10); lives--; lEl.textContent = String(lives); player.shield = 60; if (lives <= 0) { endGame(); return; } } }
+
+    // Enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      // Move toward player
+      const edx = player.x - e.x, edy = player.y - e.y;
+      const edist = Math.hypot(edx, edy);
+      if (edist > 100) { e.angle = Math.atan2(edy, edx); e.x += Math.cos(e.angle) * e.speed; e.y += Math.sin(e.angle) * e.speed; }
+      if (wallAt(e.x - 9, e.y - 9) || wallAt(e.x + 9, e.y - 9) || wallAt(e.x - 9, e.y + 9) || wallAt(e.x + 9, e.y + 9)) { e.x -= Math.cos(e.angle) * e.speed; e.y -= Math.sin(e.angle) * e.speed; e.angle += (Math.random() - 0.5) * 1.5; }
+      e.x = Math.max(10, Math.min(W - 10, e.x)); e.y = Math.max(10, Math.min(H - 10, e.y));
+      // Shoot
+      e.shootCd--; if (e.shootCd <= 0 && edist < 350) { e.shootCd = cfg.enemyShootRate; eBullets.push([e.x, e.y, Math.cos(e.angle) * 4, Math.sin(e.angle) * 4]); }
+      // Collision with player
+      if (player.shield <= 0 && Math.hypot(e.x - player.x, e.y - player.y) < 16) { pfx(player.x, player.y, '#FF5252', 10); lives--; lEl.textContent = String(lives); player.shield = 60; if (lives <= 0) { endGame(); return; } }
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) { particles[i][0] += particles[i][2]; particles[i][1] += particles[i][3]; particles[i][4]--; if (particles[i][4] <= 0) particles.splice(i, 1); }
+    if (particles.length > 80) particles.splice(0, particles.length - 80);
+    if (bullets.length > 40) bullets.splice(0, bullets.length - 40);
+    if (eBullets.length > 40) eBullets.splice(0, eBullets.length - 40);
+  }
+
+  function nextWave(): void {
+    wave++; wEl.textContent = String(wave);
+    eBullets = [];
+    setTimeout(() => spawnEnemies(), 1000);
+  }
+
+  function endGame(): void {
+    over = true; running = false;
+    pfx(player.x, player.y, '#FF5252', 30);
+    pfx(player.x, player.y, '#FFD740', 15);
+    saveScore('tank-battle', score);
+    setTimeout(() => { (window as any).__gameFeedback?.({ type: 'lose', title: 'Destroyed!', score: `${score}`, detail: `Wave ${wave} · ${diff}` }); }, 600);
+  }
+
+  function drawTank(x: number, y: number, angle: number, color: string, isPlayer: boolean): void {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+    const dark = isPlayer ? '#0088aa' : '#aa2222';
+    const light = isPlayer ? '#00ccff' : '#ff5555';
+    // Treads (outer)
+    ctx.fillStyle = '#222'; ctx.fillRect(-14, -11, 28, 4); ctx.fillRect(-14, 7, 28, 4);
+    // Tread details
+    ctx.fillStyle = '#444'; for (let i = -12; i <= 12; i += 3) { ctx.fillRect(i, -11, 2, 4); ctx.fillRect(i, 7, 2, 4); }
+    // Body
+    ctx.fillStyle = dark; ctx.fillRect(-12, -7, 24, 14);
+    ctx.fillStyle = color; ctx.fillRect(-10, -6, 20, 12);
+    // Body highlight
+    ctx.fillStyle = light; ctx.fillRect(-10, -6, 20, 4);
+    // Body details
+    ctx.fillStyle = dark; ctx.fillRect(-4, -2, 8, 4);
+    // Turret base
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+    // Barrel
+    ctx.fillStyle = '#333'; ctx.fillRect(6, -2.5, 14, 5);
+    ctx.fillStyle = '#555'; ctx.fillRect(6, -1.5, 14, 3);
+    // Barrel tip
+    ctx.fillStyle = '#222'; ctx.fillRect(18, -3, 4, 6);
+    if (isPlayer) { ctx.fillStyle = '#FFD740'; ctx.fillRect(6, -2.5, 4, 5); }
+    // Muzzle flash
+    if (isPlayer && (window as any).__tkMuzzle) { ctx.fillStyle = '#FFD740'; ctx.beginPath(); ctx.arc(22, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(22, 0, 2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+
+  function draw(): void {
+    ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth = 0.5;
+    for (let r = 0; r <= rows; r++) { ctx.beginPath(); ctx.moveTo(0, r * cell); ctx.lineTo(W, r * cell); ctx.stroke(); }
+    for (let c = 0; c <= cols; c++) { ctx.beginPath(); ctx.moveTo(c * cell, 0); ctx.lineTo(c * cell, H); ctx.stroke(); }
+
+    // Walls
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if (walls[r][c]) { ctx.fillStyle = '#444'; ctx.fillRect(c * cell + 2, r * cell + 2, cell - 4, cell - 4); ctx.fillStyle = '#555'; ctx.fillRect(c * cell + 4, r * cell + 4, cell - 8, cell - 8); }
+    }
+
+    // Enemy bullets
+    ctx.fillStyle = '#FF5252'; eBullets.forEach(b => { ctx.beginPath(); ctx.arc(b[0], b[1], 3, 0, Math.PI * 2); ctx.fill(); });
+
+    // Player bullets
+    ctx.fillStyle = '#FFD740'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b[0], b[1], 3, 0, Math.PI * 2); ctx.fill(); });
+
+    // Enemies
+    enemies.forEach(e => drawTank(e.x, e.y, e.angle, '#FF5252', false));
+
+    // Player
+    if (player.shield <= 0 || tick % 6 < 3) {
+      drawTank(player.x, player.y, player.angle, '#00E5FF', true);
+      if (player.shield > 0) { ctx.strokeStyle = '#00E676'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(player.x, player.y, 16, 0, Math.PI * 2); ctx.stroke(); }
+    }
+
+    // Particles
+    particles.forEach(p => { ctx.fillStyle = p[5]; ctx.globalAlpha = p[4] / 15; ctx.beginPath(); ctx.arc(p[0], p[1], p[6], 0, Math.PI * 2); ctx.fill(); });
+    ctx.globalAlpha = 1;
+
+    // HUD
+    ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(`Enemies: ${enemiesLeft}`, 10, 20);
+
+    if (readyCount > 0) { ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Outfit, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(readyCount), W / 2, H / 2 + 16); }
+    if (over) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#FF5252'; ctx.font = 'bold 36px Outfit, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('DESTROYED!', W / 2, H / 2 - 10); ctx.fillStyle = '#fff'; ctx.font = '18px Outfit, sans-serif'; ctx.fillText(`Score: ${score} · Wave ${wave}`, W / 2, H / 2 + 25); }
+  }
+
+  let lastTime = 0;
+  function loop(ts: number): void { if (ts - lastTime >= 16) { lastTime = ts; update(); draw(); } loopId = requestAnimationFrame(loop); }
+
+  function init(): void {
+    cancelAnimationFrame(loopId);
+    cfg = DIFF[diff];
+    resize(); initWalls();
+    const px = Math.floor(cols / 2) * cell + cell / 2, py = (rows - 2) * cell + cell / 2;
+    player = { x: px, y: py, angle: -Math.PI / 2, speed: 3, shootCd: 0, shield: 0 };
+    bullets = []; eBullets = []; particles = [];
+    score = 0; wave = 1; lives = cfg.lives; tick = 0; readyCount = 3; over = false; running = true; paused = false;
+    sEl.textContent = '0'; wEl.textContent = '1'; lEl.textContent = String(lives);
+    spawnEnemies();
+    lastTime = performance.now();
+    loopId = requestAnimationFrame(loop);
+  }
+
+  canvas.addEventListener('mousemove', e => { const r = canvas.getBoundingClientRect(); mouseX = e.clientX - r.left; mouseY = e.clientY - r.top; });
+  canvas.addEventListener('click', () => { if (player.shootCd <= 0 && !over && running) { player.shootCd = 15; (window as any).__tkMuzzle = true; setTimeout(() => (window as any).__tkMuzzle = false, 100); const a = Math.atan2(mouseY - player.y, mouseX - player.x); bullets.push([player.x, player.y, Math.cos(a) * 6, Math.sin(a) * 6, 1]); } });
+  document.addEventListener('keydown', e => { KEYS.add(e.code); if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyP' && !over) paused = !paused; });
+  document.addEventListener('keyup', e => { KEYS.delete(e.code); });
+  window.addEventListener('resize', resize);
+  document.querySelectorAll('.tk-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.tk-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('tk-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #tank-game .tk-canvas { display: block; max-width: 100%; margin: 0 auto; border-radius: var(--radius-lg); border: 2px solid var(--border-medium); background: #1a1a2e; }
+  #tank-game .tk-actions { text-align: center; margin-top: var(--space-4); }
+  #tank-game .tk-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #tank-game .tk-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #tank-game .tk-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  #tank-game .tk-hint { text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-2); }
+</style>

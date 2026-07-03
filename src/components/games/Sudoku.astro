@@ -1,0 +1,323 @@
+---
+// Sudoku game component
+// Classic Sudoku puzzle with difficulty levels
+---
+
+<div class="game-container" id="sudoku-game">
+  <div class="sudoku-board" id="sudoku-board">
+    <!-- 9x9 grid -->
+  </div>
+
+  <div class="sudoku-numpad" id="sudoku-numpad">
+    {[1,2,3,4,5,6,7,8,9].map(n => (
+      <button class="sudoku-num-btn" data-num={n}>{n}</button>
+    ))}
+    <button class="sudoku-num-btn sudoku-num-btn--erase" data-num="0">✕</button>
+  </div>
+
+  <div class="game-stats" id="sudoku-stats">
+    <div class="stat">
+      <span class="stat-value" id="sudoku-time-display">0:00</span>
+      <span class="stat-label">Time</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="sudoku-empty-display">0</span>
+      <span class="stat-label">Remaining</span>
+    </div>
+  </div>
+
+  <div class="sudoku-actions">
+    <button class="game-btn game-btn--secondary" id="sudoku-easy-btn">Easy</button>
+    <button class="game-btn game-btn--primary" id="sudoku-medium-btn">Medium</button>
+    <button class="game-btn game-btn--secondary" id="sudoku-hard-btn">Hard</button>
+    <button class="game-btn game-btn--primary" id="sudoku-new-btn">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  type Board = number[][];
+  let solution: Board = [];
+  let puzzle: Board = [];
+  let playerBoard: Board = [];
+  let selectedCell: [number, number] | null = null;
+  let startTime: number | null = null;
+  let timerInterval: number | null = null;
+
+  const boardEl = document.getElementById('sudoku-board')!;
+  const timeDisplay = document.getElementById('sudoku-time-display')!;
+  const emptyDisplay = document.getElementById('sudoku-empty-display')!;
+
+  function createEmptyBoard(): Board {
+    return Array.from({ length: 9 }, () => Array(9).fill(0));
+  }
+
+  function isValid(board: Board, row: number, col: number, num: number): boolean {
+    for (let i = 0; i < 9; i++) {
+      if (board[row][i] === num) return false;
+      if (board[i][col] === num) return false;
+    }
+    const boxRow = Math.floor(row / 3) * 3;
+    const boxCol = Math.floor(col / 3) * 3;
+    for (let r = boxRow; r < boxRow + 3; r++) {
+      for (let c = boxCol; c < boxCol + 3; c++) {
+        if (board[r][c] === num) return false;
+      }
+    }
+    return true;
+  }
+
+  function solve(board: Board): boolean {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (board[r][c] === 0) {
+          const nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+          for (const num of nums) {
+            if (isValid(board, r, c, num)) {
+              board[r][c] = num;
+              if (solve(board)) return true;
+              board[r][c] = 0;
+            }
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function generatePuzzle(difficulty: number): void {
+    solution = createEmptyBoard();
+    solve(solution);
+
+    puzzle = solution.map((row) => [...row]);
+    playerBoard = solution.map((row) => [...row]);
+
+    // Remove cells based on difficulty
+    const cellsToRemove = { easy: 35, medium: 45, hard: 55 }[difficulty] || 40;
+    let removed = 0;
+    while (removed < cellsToRemove) {
+      const r = Math.floor(Math.random() * 9);
+      const c = Math.floor(Math.random() * 9);
+      if (puzzle[r][c] !== 0) {
+        puzzle[r][c] = 0;
+        playerBoard[r][c] = 0;
+        removed++;
+      }
+    }
+  }
+
+  function renderBoard(): void {
+    boardEl.innerHTML = '';
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'sudoku-cell';
+        if (puzzle[r][c] !== 0) {
+          cell.classList.add('given');
+          cell.textContent = String(puzzle[r][c]);
+        } else if (playerBoard[r][c] !== 0) {
+          cell.textContent = String(playerBoard[r][c]);
+          cell.classList.add('player');
+        }
+        if (selectedCell && selectedCell[0] === r && selectedCell[1] === c) {
+          cell.classList.add('selected');
+        }
+        cell.addEventListener('click', () => selectCell(r, c));
+        boardEl.appendChild(cell);
+      }
+    }
+    updateEmptyCount();
+  }
+
+  function selectCell(r: number, c: number): void {
+    if (puzzle[r][c] !== 0) return;
+    selectedCell = [r, c];
+    renderBoard();
+  }
+
+  function placeNumber(num: number): void {
+    if (!selectedCell) return;
+    if (!startTime) startTimer();
+    const [r, c] = selectedCell;
+    playerBoard[r][c] = num;
+    renderBoard();
+    if (checkComplete()) finishGame();
+  }
+
+  function checkComplete(): boolean {
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < 9; c++)
+        if (playerBoard[r][c] !== solution[r][c]) return false;
+    return true;
+  }
+
+  function updateEmptyCount(): void {
+    let count = 0;
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < 9; c++)
+        if (playerBoard[r][c] === 0) count++;
+    emptyDisplay.textContent = String(count);
+  }
+
+  function startTimer(): void {
+    startTime = Date.now();
+    timerInterval = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime!) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      timeDisplay.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+  }
+
+  function finishGame(): void {
+    if (timerInterval) clearInterval(timerInterval);
+    const score = Math.max(100, 1000 - Math.floor((Date.now() - startTime!) / 1000));
+    saveScore('sudoku', score);
+    renderBoard();
+  }
+
+  function initGame(difficulty = 'medium'): void {
+    if (timerInterval) clearInterval(timerInterval);
+    startTime = null;
+    selectedCell = null;
+    timeDisplay.textContent = '0:00';
+    generatePuzzle(difficulty);
+    renderBoard();
+  }
+
+  document.getElementById('sudoku-easy-btn')!.addEventListener('click', () => initGame('easy'));
+  document.getElementById('sudoku-medium-btn')!.addEventListener('click', () => initGame('medium'));
+  document.getElementById('sudoku-hard-btn')!.addEventListener('click', () => initGame('hard'));
+  document.getElementById('sudoku-new-btn')!.addEventListener('click', () => initGame());
+
+  document.getElementById('sudoku-numpad')!.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.sudoku-num-btn');
+    if (btn) {
+      const num = parseInt(btn.getAttribute('data-num')!);
+      placeNumber(num);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 9) placeNumber(num);
+    if (e.key === 'Backspace' || e.key === 'Delete') placeNumber(0);
+  });
+
+  initGame();
+</script>
+
+<style is:global>
+  #sudoku-game .sudoku-board {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    max-width: 500px;
+    margin: 0 auto;
+    border: 3px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--border-strong);
+    gap: 1px;
+  }
+
+  #sudoku-game .sudoku-cell {
+    aspect-ratio: 1;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text-primary);
+    position: relative;
+  }
+
+  /* 3x3 box borders — every 3rd column (except last) gets a thick right border */
+  #sudoku-game .sudoku-cell:nth-child(3n):not(:nth-child(9n)) {
+    border-right: 3px solid var(--border-strong);
+  }
+
+  /* 3x3 box borders — rows 3 and 6 get a thick bottom border */
+  #sudoku-game .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+  #sudoku-game .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+    border-bottom: 3px solid var(--border-strong);
+  }
+
+  /* Cell states */
+  #sudoku-game .sudoku-cell.given {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    cursor: default;
+    font-size: 1.6rem;
+  }
+
+  #sudoku-game .sudoku-cell.player {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+  }
+
+  #sudoku-game .sudoku-cell.selected {
+    background: var(--bg-hover);
+    box-shadow: inset 0 0 0 2px var(--accent-purple);
+  }
+
+  #sudoku-game .sudoku-cell:not(.given):hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-cyan);
+  }
+
+  /* Numpad */
+  #sudoku-game .sudoku-numpad {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: var(--space-4) 0;
+    flex-wrap: wrap;
+  }
+
+  #sudoku-game .sudoku-num-btn {
+    width: 48px; height: 48px;
+    border: 2px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  #sudoku-game .sudoku-num-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.15);
+  }
+
+  #sudoku-game .sudoku-num-btn--erase {
+    color: var(--accent-red);
+    font-size: 1.1rem;
+  }
+
+  /* Actions */
+  #sudoku-game .sudoku-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+  }
+
+  @media (max-width: 520px) {
+    #sudoku-game .sudoku-board { max-width: 100%; }
+    #sudoku-game .sudoku-cell { font-size: 1.1rem; }
+    #sudoku-game .sudoku-cell.given { font-size: 1.2rem; }
+    #sudoku-game .sudoku-cell.player { font-size: 1.1rem; }
+    #sudoku-game .sudoku-num-btn { width: 38px; height: 38px; font-size: 1rem; }
+  }
+</style>

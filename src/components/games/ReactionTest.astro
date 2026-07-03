@@ -1,0 +1,355 @@
+---
+// ReactionTest — random-position target click challenge with difficulty levels
+---
+
+<div class="game-container" id="reaction-test-game">
+  <div class="reaction-area" id="reaction-area">
+    <div class="reaction-message" id="reaction-message">Select difficulty &amp; click to start</div>
+    <div class="reaction-target" id="reaction-target" style="display: none;"></div>
+  </div>
+
+  <div class="game-stats" id="reaction-stats">
+    <div class="stat">
+      <span class="stat-value" id="reaction-time-display">---</span>
+      <span class="stat-label">Last</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="reaction-avg-display">---</span>
+      <span class="stat-label">Average</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="reaction-best-display">---</span>
+      <span class="stat-label">Best</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="reaction-attempt-display">0/5</span>
+      <span class="stat-label">Round</span>
+    </div>
+  </div>
+
+  <div class="reaction-actions">
+    <div class="reaction-difficulty" id="reaction-difficulty">
+      <button class="game-btn game-btn--secondary reaction-diff-btn active" data-diff="beginner">Beginner</button>
+      <button class="game-btn game-btn--secondary reaction-diff-btn" data-diff="intermediate">Intermediate</button>
+      <button class="game-btn game-btn--secondary reaction-diff-btn" data-diff="advanced">Advanced</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="reaction-restart-btn">Restart Test</button>
+  </div>
+
+  <div id="reaction-result" class="reaction-result" style="display: none;">
+    <div class="result-content">
+      <h3>Test Complete!</h3>
+      <div class="result-stats">
+        <div class="result-stat">
+          <span class="result-stat-value" id="final-reaction-avg">---</span>
+          <span class="result-stat-label">Average</span>
+        </div>
+        <div class="result-stat">
+          <span class="result-stat-value" id="final-reaction-best">---</span>
+          <span class="result-stat-label">Best</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const TOTAL = 5;
+  const TARGET_SIZE = 70;
+
+  const COLORS = ['#00E676','#FF5252','#448AFF','#FF9100','#FF4081','#00E5FF','#7C4DFF','#FFD740'];
+  const SHAPES = ['circle','square','diamond','triangle','hexagon','star'];
+
+  type Difficulty = 'beginner' | 'intermediate' | 'advanced';
+
+  const DIFFICULTY: Record<Difficulty, { label: string; delay: () => number; desc: string }> = {
+    beginner: {
+      label: 'Beginner',
+      delay: () => 2000,
+      desc: 'Fixed 2s delay',
+    },
+    intermediate: {
+      label: 'Intermediate',
+      delay: () => 800 + Math.random() * 2500,
+      desc: 'Random 0.8–3.3s',
+    },
+    advanced: {
+      label: 'Advanced',
+      delay: () => 200 + Math.random() * 800,
+      desc: 'Quick 0.2–1.0s',
+    },
+  };
+
+  let difficulty: Difficulty = 'beginner';
+  let state: 'idle' | 'waiting' | 'ready' | 'done' = 'idle';
+  let times: number[] = [];
+  let timeoutId: number | null = null;
+  let readyTime = 0;
+
+  const area = document.getElementById('reaction-area')!;
+  const message = document.getElementById('reaction-message')!;
+  const target = document.getElementById('reaction-target')!;
+  const timeEl = document.getElementById('reaction-time-display')!;
+  const avgEl = document.getElementById('reaction-avg-display')!;
+  const bestEl = document.getElementById('reaction-best-display')!;
+  const attemptEl = document.getElementById('reaction-attempt-display')!;
+  const resultDiv = document.getElementById('reaction-result')!;
+
+  function avg() { return times.length ? Math.round(times.reduce((a,b) => a+b, 0) / times.length) : 0; }
+  function best() { return times.length ? Math.min(...times) : 0; }
+
+  function updateStats(): void {
+    const last = times.length ? times[times.length - 1] : 0;
+    timeEl.textContent = last ? `${last}ms` : '---';
+    avgEl.textContent = times.length ? `${avg()}ms` : '---';
+    bestEl.textContent = times.length ? `${best()}ms` : '---';
+    attemptEl.textContent = `${times.length}/${TOTAL}`;
+  }
+
+  function randomPos(): { x: number; y: number } {
+    const pad = TARGET_SIZE / 2 + 10;
+    return {
+      x: pad + Math.random() * (area.clientWidth - pad * 2),
+      y: pad + Math.random() * (area.clientHeight - pad * 2),
+    };
+  }
+
+  function showTarget(): void {
+    state = 'ready';
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+    const pos = randomPos();
+
+    target.style.background = color;
+    target.style.boxShadow = `0 0 40px ${color}80, 0 0 80px ${color}30`;
+    target.dataset.shape = shape;
+    target.style.left = `${pos.x}px`;
+    target.style.top = `${pos.y}px`;
+    target.style.transition = 'none';
+    const base = shape === 'diamond' ? 'translate(-50%, -50%) rotate(45deg)' : 'translate(-50%, -50%)';
+    target.style.transform = `${base} scale(0)`;
+    target.style.display = 'block';
+    message.style.display = 'none';
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        target.style.transition = 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        target.style.transform = `${base} scale(1)`;
+      });
+    });
+    readyTime = Date.now();
+  }
+
+  function hideTarget(): void { target.style.display = 'none'; }
+
+  function startWait(): void {
+    state = 'waiting';
+    message.textContent = 'Wait for the target...';
+    message.style.display = 'block';
+    hideTarget();
+    const delay = DIFFICULTY[difficulty].delay();
+    timeoutId = window.setTimeout(showTarget, delay);
+  }
+
+  function onAreaClick(e: MouseEvent): void {
+    if (state === 'done') return;
+    if (state === 'idle') { startWait(); return; }
+    if (state === 'waiting') {
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+      state = 'idle';
+      message.textContent = 'Too early! Wait for the target.';
+      message.style.display = 'block';
+      hideTarget();
+      setTimeout(startWait, 1200);
+      return;
+    }
+    if (e.target !== target) return;
+  }
+
+  function onTargetClick(e: MouseEvent): void {
+    e.stopPropagation();
+    if (state !== 'ready') return;
+    const rt = Date.now() - readyTime;
+    times.push(rt);
+    state = 'idle';
+    message.textContent = `${rt}ms`;
+    message.style.display = 'block';
+    hideTarget();
+    updateStats();
+    if (times.length >= TOTAL) finishGame();
+    else setTimeout(startWait, 800);
+  }
+
+  function finishGame(): void {
+    state = 'done';
+    message.textContent = 'Test Complete!';
+    message.style.display = 'block';
+    hideTarget();
+    saveScore('reaction-test', avg());
+
+    document.getElementById('final-reaction-avg')!.textContent = `${avg()}ms`;
+    document.getElementById('final-reaction-best')!.textContent = `${best()}ms`;
+    resultDiv.style.display = 'block';
+
+    const thresholds: Record<Difficulty, number> = { beginner: 400, intermediate: 350, advanced: 300 };
+    const isFast = avg() < thresholds[difficulty];
+    (window as any).__gameFeedback?.({
+      type: isFast ? 'win' : 'lose',
+      title: isFast ? 'Lightning Fast!' : 'Test Complete',
+      score: `${avg()}ms`,
+      detail: `${DIFFICULTY[difficulty].label} · Best: ${best()}ms`,
+    });
+  }
+
+  function init(): void {
+    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+    times = []; state = 'idle';
+    message.textContent = 'Select difficulty & click to start';
+    message.style.display = 'block';
+    hideTarget();
+    resultDiv.style.display = 'none';
+    updateStats();
+  }
+
+  // Difficulty buttons
+  document.querySelectorAll('.reaction-diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.reaction-diff-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      difficulty = (btn as HTMLElement).dataset.diff as Difficulty;
+      init();
+    });
+  });
+
+  area.addEventListener('click', onAreaClick);
+  target.addEventListener('click', onTargetClick);
+  document.getElementById('reaction-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #reaction-test-game .reaction-area {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+    min-height: 350px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: crosshair;
+    transition: all 0.3s ease;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #reaction-test-game .reaction-area--idle     { border-color: var(--border-medium); background: var(--bg-tertiary); }
+  #reaction-test-game .reaction-area--waiting  { border-color: var(--accent-red); background: rgba(255,82,82,0.04); }
+  #reaction-test-game .reaction-area--ready    { border-color: var(--accent-green); background: rgba(0,230,118,0.04); box-shadow: inset 0 0 60px rgba(0,230,118,0.06); }
+  #reaction-test-game .reaction-area--done     { border-color: var(--border-subtle); cursor: default; }
+
+  #reaction-test-game .reaction-message {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  #reaction-test-game .reaction-target {
+    position: absolute;
+    width: 70px; height: 70px;
+    cursor: pointer;
+    animation: target-pulse 1.2s ease-in-out infinite;
+  }
+
+  #reaction-test-game .reaction-target[data-shape="circle"]   { border-radius: 50%; }
+  #reaction-test-game .reaction-target[data-shape="square"]   { border-radius: 10px; }
+  #reaction-test-game .reaction-target[data-shape="diamond"]  { border-radius: 6px; }
+  #reaction-test-game .reaction-target[data-shape="triangle"] { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); border-radius: 0; width: 80px; height: 72px; }
+  #reaction-test-game .reaction-target[data-shape="hexagon"]  { clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); border-radius: 0; }
+  #reaction-test-game .reaction-target[data-shape="star"]     { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); border-radius: 0; width: 80px; height: 80px; }
+
+  @keyframes target-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.3); }
+  }
+
+  #reaction-test-game .reaction-actions {
+    text-align: center;
+    margin-top: var(--space-6);
+  }
+
+  #reaction-test-game .reaction-difficulty {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: center;
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  #reaction-test-game .reaction-diff-btn {
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-4);
+  }
+
+  #reaction-test-game .reaction-diff-btn.active {
+    background: var(--gradient-accent);
+    color: #fff;
+    border-color: transparent;
+  }
+
+  #reaction-test-game .reaction-result {
+    margin-top: var(--space-6);
+    animation: fadeIn 0.5s ease;
+  }
+
+  #reaction-test-game .reaction-result .result-content {
+    text-align: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+  }
+
+  #reaction-test-game .reaction-result .result-content h3 {
+    font-size: var(--text-2xl);
+    margin-bottom: var(--space-4);
+    color: var(--accent-green);
+  }
+
+  #reaction-test-game .reaction-result .result-stats {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-12);
+  }
+
+  #reaction-test-game .reaction-result .result-stat {
+    text-align: center;
+  }
+
+  #reaction-test-game .reaction-result .result-stat-value {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+  }
+
+  #reaction-test-game .result-stat-label {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 520px) {
+    #reaction-test-game .reaction-area { min-height: 280px; }
+    #reaction-test-game .reaction-target { width: 56px; height: 56px; }
+    #reaction-test-game .reaction-target[data-shape="triangle"],
+    #reaction-test-game .reaction-target[data-shape="star"] { width: 64px; height: 64px; }
+  }
+</style>

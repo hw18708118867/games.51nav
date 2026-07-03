@@ -1,0 +1,88 @@
+---
+// GameIcon — animated game card icon with float + hover effect
+interface Props {
+  icon: string;
+  heroColor?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
+const { icon, heroColor = '#00E5FF', size = 'md' } = Astro.props;
+---
+
+<div class={`game-icon game-icon--${size}`} style={`--icon-color: ${heroColor}`}>
+  <div class="game-icon__glow"></div>
+  <span class="game-icon__emoji">{icon}</span>
+</div>
+
+<style>
+  .game-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--icon-size, 72px);
+    height: var(--icon-size, 72px);
+    border-radius: var(--radius-lg);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.3s ease,
+                border-color 0.3s ease;
+  }
+
+  .game-icon--sm { --icon-size: 48px; }
+  .game-icon--md { --icon-size: 72px; }
+  .game-icon--lg { --icon-size: 96px; }
+  .game-icon--xl { --icon-size: 88px; border-radius: var(--radius-xl); }
+
+  .game-icon__glow {
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    background: var(--icon-color);
+    opacity: 0;
+    filter: blur(12px);
+    transition: opacity 0.4s ease;
+    z-index: 0;
+  }
+
+  .game-icon__emoji {
+    position: relative;
+    z-index: 1;
+    font-size: calc(var(--icon-size, 72px) * 0.45);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: icon-float 4s ease-in-out infinite;
+    animation-delay: calc(var(--icon-delay, 0) * 1s);
+  }
+
+  .game-icon:hover {
+    transform: translateY(-4px);
+    border-color: var(--icon-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 229, 255, 0.1);
+  }
+
+  .game-icon:hover .game-icon__glow {
+    opacity: 0.25;
+  }
+
+  .game-icon:hover .game-icon__emoji {
+    transform: scale(1.15);
+    animation: icon-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes icon-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  @keyframes icon-bounce {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.2); }
+    60% { transform: scale(0.95); }
+    100% { transform: scale(1.15); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .game-icon__emoji { animation: none !important; }
+  }
+</style>

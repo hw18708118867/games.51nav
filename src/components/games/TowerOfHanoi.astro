@@ -1,0 +1,134 @@
+---
+// TowerOfHanoi — classic disk stacking puzzle
+---
+
+<div class="game-container" id="hanoi-game">
+  <div class="hanoi-info">
+    <span>Disks: <strong id="hanoi-count">4</strong></span>
+    <span>Moves: <strong id="hanoi-moves">0</strong></span>
+    <span>Min: <strong id="hanoi-min">15</strong></span>
+  </div>
+  <div class="hanoi-hint">Move all disks from A → C. Larger disks cannot go on smaller ones.</div>
+  <div class="hanoi-board" id="hanoi-board"></div>
+  <div class="hanoi-actions">
+    <div class="hanoi-difficulty"><button class="game-btn game-btn--secondary hn-diff-btn active" data-diff="easy">Easy 3</button><button class="game-btn game-btn--secondary hn-diff-btn" data-diff="medium">Medium 4</button><button class="game-btn game-btn--secondary hn-diff-btn" data-diff="hard">Hard 5</button></div>
+    <button class="game-btn game-btn--primary" id="hanoi-restart">Reset</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+  const DIFF = { easy: 3, medium: 4, hard: 5 };
+  let diff: keyof typeof DIFF = 'easy', disks = DIFF[diff];
+  let pegs: number[][] = [[], [], []];
+  let moves = 0;
+  let selected: number | null = null;
+  let won = false;
+
+  const boardEl = document.getElementById('hanoi-board')!;
+  const movesEl = document.getElementById('hanoi-moves')!;
+  const countEl = document.getElementById('hanoi-count')!;
+  const minEl = document.getElementById('hanoi-min')!;
+
+  const COLORS = ['#FF5252','#FF9100','#FFD740','#00E676','#4FC3F7','#7C4DFF'];
+
+  function render(): void {
+    boardEl.innerHTML = '';
+    const labels = ['A', 'B', 'C'];
+    pegs.forEach((peg, pi) => {
+      const pegEl = document.createElement('div');
+      pegEl.className = 'hanoi-peg';
+      pegEl.addEventListener('click', () => clickPeg(pi));
+      if (selected === pi) pegEl.classList.add('selected');
+      if (pi === 2 && !won) pegEl.classList.add('target');
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'hanoi-label';
+      labelEl.textContent = labels[pi];
+      pegEl.appendChild(labelEl);
+
+      const stackEl = document.createElement('div');
+      stackEl.className = 'hanoi-stack';
+      peg.forEach((disk, di) => {
+        const d = document.createElement('div');
+        d.className = 'hanoi-disk';
+        d.style.width = `${(disk / disks) * 100}%`;
+        d.style.background = COLORS[disk - 1];
+        if (selected === pi && di === peg.length - 1) d.classList.add('picked');
+        stackEl.appendChild(d);
+      });
+      pegEl.appendChild(stackEl);
+      boardEl.appendChild(pegEl);
+    });
+  }
+
+  function clickPeg(pi: number): void {
+    if (won) return;
+    if (selected === null) {
+      if (pegs[pi].length === 0) return;
+      selected = pi;
+      render();
+    } else {
+      if (selected === pi) { selected = null; render(); return; }
+      const top = pegs[selected][pegs[selected].length - 1];
+      const targetTop = pegs[pi].length ? pegs[pi][pegs[pi].length - 1] : Infinity;
+      if (top < targetTop) {
+        pegs[pi].push(pegs[selected].pop()!);
+        moves++;
+        movesEl.textContent = String(moves);
+        selected = null;
+        render();
+        if (pegs[2].length === disks) {
+          won = true;
+          const min = Math.pow(2, disks) - 1;
+          saveScore('hanoi', Math.max(100, 500 - (moves - min) * 10));
+          (window as any).__gameFeedback?.({ type: 'win', title: 'Solved!', score: `${moves} moves`, detail: `Minimum: ${min} · ${disks} disks` });
+        }
+      } else {
+        selected = pi;
+        render();
+      }
+    }
+  }
+
+  function init(): void {
+    disks = DIFF[diff];
+    pegs = [Array.from({length: disks}, (_, i) => disks - i), [], []];
+    moves = 0; selected = null; won = false;
+    movesEl.textContent = '0';
+    countEl.textContent = String(disks);
+    minEl.textContent = String(Math.pow(2, disks) - 1);
+    render();
+  }
+
+  document.querySelectorAll('.hn-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.hn-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('hanoi-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #hanoi-game .hanoi-info { display: flex; gap: var(--space-6); justify-content: center; margin-bottom: var(--space-4); font-size: var(--text-sm); color: var(--text-muted); }
+  #hanoi-game .hanoi-info strong { color: var(--text-primary); }
+  #hanoi-game .hanoi-board {
+    display: flex; gap: var(--space-4); justify-content: center; max-width: 500px; margin: 0 auto;
+    min-height: 200px; align-items: flex-end;
+  }
+  #hanoi-game .hanoi-hint { text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-4); }
+  #hanoi-game .hanoi-label { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; color: var(--text-muted); margin-bottom: var(--space-1); z-index: 1; text-align: center; }
+  #hanoi-game .hanoi-peg {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    cursor: pointer; border-radius: var(--radius-md); padding: var(--space-2);
+    border: 2px solid transparent; transition: border-color 0.2s; position: relative; min-height: 180px;
+  }
+  #hanoi-game .hanoi-peg::before { content: ''; position: absolute; bottom: 0; width: 8px; height: 100px; background: var(--border-medium); border-radius: 4px; z-index: 0; }
+  #hanoi-game .hanoi-peg.selected { border-color: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,229,255,.2); }
+  #hanoi-game .hanoi-peg.target { border-color: rgba(0,230,118,.3); }
+  #hanoi-game .hanoi-peg:hover { border-color: var(--border-strong); }
+  #hanoi-game .hanoi-stack { display: flex; flex-direction: column; align-items: center; gap: 3px; z-index: 1; padding-bottom: 100px; width: 100%; }
+  #hanoi-game .hanoi-disk { height: 22px; border-radius: var(--radius-full); transition: all 0.2s; }
+  #hanoi-game .hanoi-disk.picked { transform: translateY(-20px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  #hanoi-game .hanoi-actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; margin-top: var(--space-4); }
+  #hanoi-game .hanoi-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; width: 100%; }
+  #hanoi-game .hn-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #hanoi-game .hn-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

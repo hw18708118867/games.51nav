@@ -1,0 +1,103 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/layout/Header.astro';
+import Footer from '../components/layout/Footer.astro';
+
+const pageTitle = 'Terms of Service';
+const pageDescription = 'Brain Games Hub Terms of Service — Read the terms and conditions for using our free online brain training games.';
+---
+
+<BaseLayout title={pageTitle} description={pageDescription}>
+  <Header />
+
+  <main class="container">
+    <section class="page-hero">
+      <h1>Terms of Service</h1>
+      <p class="lead">Last updated: June 28, 2026</p>
+    </section>
+
+    <section class="content-section">
+      <h2>1. Acceptance of Terms</h2>
+      <p>
+        By accessing and using Brain Games Hub, you accept and agree to be bound by
+        these Terms of Service. If you do not agree to these terms, please do
+        not use our website.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>2. Description of Service</h2>
+      <p>
+        Brain Games Hub provides free online brain training games and cognitive tests.
+        All games are provided "as is" and for entertainment and educational
+        purposes only. Game scores and results should not be used for medical
+        diagnosis or clinical assessment.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>3. User Conduct</h2>
+      <p>You agree not to:</p>
+      <ul>
+        <li>Use the website in any way that violates applicable laws or regulations</li>
+        <li>Attempt to interfere with the proper functioning of the website</li>
+        <li>Use automated scripts or bots to interact with the website</li>
+        <li>Reverse engineer or attempt to extract the source code of our games</li>
+      </ul>
+    </section>
+
+    <section class="content-section">
+      <h2>4. Intellectual Property</h2>
+      <p>
+        All content, games, graphics, and code on Brain Games Hub are the intellectual
+        property of Brain Games Hub unless otherwise stated. You may not reproduce,
+        distribute, or create derivative works without our express permission.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>5. Disclaimer of Warranties</h2>
+      <p>
+        Brain Games Hub is provided on an "as is" and "as available" basis. We make no
+        warranties, express or implied, regarding the availability, accuracy, or
+        reliability of our services.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>6. Limitation of Liability</h2>
+      <p>
+        Brain Games Hub shall not be liable for any indirect, incidental, special, or
+        consequential damages arising out of or in connection with the use of
+        our website.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2>7. Contact</h2>
+      <p>
+        For questions about these Terms, please contact us at
+        <a href="mailto:miraclehuang611@gmail.com">miraclehuang611@gmail.com</a>.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .page-hero {
+    text-align: center;
+    padding: var(--space-16) 0 var(--space-8);
+  }
+
+  .page-hero h1 {
+    font-size: var(--text-4xl);
+    margin-bottom: var(--space-4);
+  }
+
+  .lead {
+    font-size: var(--text-xl);
+    color: var(--text-secondary);
+  }
+</style>

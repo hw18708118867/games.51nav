@@ -1,0 +1,33 @@
+---
+interface Props {
+  variant?: 'primary' | 'secondary';
+  size?: 'default' | 'lg';
+  href?: string;
+  type?: 'button' | 'submit';
+  disabled?: boolean;
+  class?: string;
+}
+
+const {
+  variant = 'primary',
+  size = 'default',
+  href,
+  type = 'button',
+  disabled = false,
+  class: className = '',
+} = Astro.props;
+
+const sizeClass = size === 'lg' ? 'game-btn--lg' : '';
+const variantClass = variant === 'primary' ? 'game-btn--primary' : 'game-btn--secondary';
+const combinedClass = `game-btn ${variantClass} ${sizeClass} ${className}`.trim();
+---
+
+{href ? (
+  <a href={href} class={combinedClass}>
+    <slot />
+  </a>
+) : (
+  <button type={type} disabled={disabled} class={combinedClass}>
+    <slot />
+  </button>
+)}

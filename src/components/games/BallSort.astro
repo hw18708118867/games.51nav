@@ -1,0 +1,114 @@
+---
+// BallSort — color sorting puzzle
+---
+
+<div class="game-container" id="ballsort-game">
+  <div class="bs-tubes" id="bs-tubes"></div>
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="bs-moves">0</span>
+      <span class="stat-label">Moves</span>
+    </div>
+  </div>
+  <div class="bs-actions">
+    <div class="bs-difficulty"><button class="game-btn game-btn--secondary bs-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary bs-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary bs-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="bs-restart">New Game</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const ALL_COLORS = ['#FF5252','#4FC3F7','#00E676','#FFD740','#FF9100','#FF4081'];
+  const DIFF = { easy: { colors: 4, empty: 2 }, medium: { colors: 5, empty: 2 }, hard: { colors: 6, empty: 2 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  const CAP = 4;
+  let tubes: string[][] = [];
+  let selected: number | null = null;
+  let moves = 0;
+  let over = false;
+
+  const tubesEl = document.getElementById('bs-tubes')!;
+  const movesEl = document.getElementById('bs-moves')!;
+
+  function render(): void {
+    tubesEl.innerHTML = '';
+    tubes.forEach((tube, i) => {
+      const t = document.createElement('div');
+      t.className = 'bs-tube';
+      if (selected === i) t.classList.add('selected');
+      t.addEventListener('click', () => clickTube(i));
+
+      // Balls (bottom to top)
+      for (let j = CAP - 1; j >= 0; j--) {
+        const ball = document.createElement('div');
+        ball.className = 'bs-ball';
+        if (tube[j]) { ball.style.background = tube[j]; }
+        t.appendChild(ball);
+      }
+      tubesEl.appendChild(t);
+    });
+  }
+
+  function clickTube(i: number): void {
+    if (over) return;
+    if (selected === null) {
+      if (!tubes[i].length) return;
+      selected = i;
+      render();
+    } else {
+      if (selected === i) { selected = null; render(); return; }
+      const from = tubes[selected];
+      const to = tubes[i];
+      if (to.length >= CAP) return;
+      if (to.length > 0 && to[to.length - 1] !== from[from.length - 1]) { selected = i; render(); return; }
+
+      to.push(from.pop()!);
+      moves++;
+      movesEl.textContent = String(moves);
+      selected = null;
+      render();
+
+      if (tubes.every(t => t.length === 0 || (t.length === CAP && t.every(b => b === t[0])))) {
+        over = true;
+        saveScore('ball-sort', Math.max(100, 500 - moves * 5));
+        (window as any).__gameFeedback?.({ type: 'win', title: 'Sorted!', score: `${moves} moves`, detail: 'All tubes sorted!' });
+      }
+    }
+  }
+
+  function init(): void {
+    cfg = DIFF[diff];
+    const colors = ALL_COLORS.slice(0, cfg.colors);
+    const balls = colors.flatMap(c => [c, c, c, c]);
+    for (let i = balls.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [balls[i], balls[j]] = [balls[j], balls[i]]; }
+
+    tubes = [];
+    for (let i = 0; i < cfg.colors; i++) tubes.push(balls.slice(i * CAP, (i + 1) * CAP));
+    for (let i = 0; i < cfg.empty; i++) tubes.push([]);
+
+    moves = 0; selected = null; over = false;
+    movesEl.textContent = '0';
+    render();
+  }
+
+  document.querySelectorAll('.bs-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.bs-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('bs-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #ballsort-game .bs-tubes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; max-width: 500px; margin: 0 auto; }
+  #ballsort-game .bs-tube {
+    display: flex; flex-direction: column-reverse; gap: 3px;
+    width: 52px; padding: 8px 4px; background: rgba(255,255,255,0.03); border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border: 2px solid var(--border-subtle); border-top: none; cursor: pointer; transition: border-color 0.2s; min-height: 180px;
+  }
+  #ballsort-game .bs-tube:hover { border-color: var(--border-strong); }
+  #ballsort-game .bs-tube.selected { border-color: var(--accent-cyan); box-shadow: 0 0 12px rgba(0,229,255,0.2); }
+  #ballsort-game .bs-ball { width: 36px; height: 36px; border-radius: 50%; margin: 0 auto; transition: transform 0.2s; background: var(--bg-tertiary); }
+  #ballsort-game .bs-actions { text-align: center; margin-top: var(--space-4); }
+  #ballsort-game .bs-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #ballsort-game .bs-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #ballsort-game .bs-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+</style>

@@ -1,0 +1,202 @@
+---
+// StroopTest — color-word interference with difficulty
+---
+
+<div class="game-container" id="stroop-test-game">
+  <div class="stroop-display">
+    <div class="stroop-word" id="stroop-word">RED</div>
+    <div class="stroop-feedback" id="stroop-fb"></div>
+    <div class="stroop-prompt">Name the COLOR of the text, not the word!</div>
+  </div>
+
+  <div class="stroop-buttons" id="stroop-buttons">
+    <button class="stroop-btn" data-color="#FF5252" style="background:#FF5252;">Red</button>
+    <button class="stroop-btn" data-color="#4FC3F7" style="background:#4FC3F7;">Blue</button>
+    <button class="stroop-btn" data-color="#00E676" style="background:#00E676;">Green</button>
+    <button class="stroop-btn" data-color="#FF9100" style="background:#FF9100;">Orange</button>
+    <button class="stroop-btn" data-color="#FF4081" style="background:#FF4081;">Pink</button>
+  </div>
+
+  <div class="game-stats">
+    <div class="stat">
+      <span class="stat-value" id="stroop-score-display">0</span>
+      <span class="stat-label">Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="stroop-correct-display">0</span>
+      <span class="stat-label">Correct</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="stroop-round-display">1/10</span>
+      <span class="stat-label">Round</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="stroop-time-display">0.0s</span>
+      <span class="stat-label">Avg</span>
+    </div>
+  </div>
+
+  <div class="stroop-actions">
+    <div class="stroop-difficulty">
+      <button class="game-btn game-btn--secondary st-diff-btn active" data-diff="easy">Easy</button>
+      <button class="game-btn game-btn--secondary st-diff-btn" data-diff="medium">Medium</button>
+      <button class="game-btn game-btn--secondary st-diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button class="game-btn game-btn--primary" id="stroop-restart-btn">New Test</button>
+  </div>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const COLORS = [
+    { name: 'RED', hex: '#FF5252' },
+    { name: 'BLUE', hex: '#4FC3F7' },
+    { name: 'GREEN', hex: '#00E676' },
+    { name: 'ORANGE', hex: '#FF9100' },
+    { name: 'PINK', hex: '#FF4081' },
+  ];
+
+  const DIFF = { easy: { total: 10, incongruent: 0.6 }, medium: { total: 20, incongruent: 0.75 }, hard: { total: 30, incongruent: 0.9 } };
+
+  let difficulty: keyof typeof DIFF = 'easy';
+  let cfg = DIFF[difficulty];
+  let round = 1, score = 0, correct = 0;
+  let currentColor = '', times: number[] = [], roundStart = 0;
+  let over = false;
+
+  const wordEl = document.getElementById('stroop-word')!;
+  const fbEl = document.getElementById('stroop-fb')!;
+  const scoreEl = document.getElementById('stroop-score-display')!;
+  const correctEl = document.getElementById('stroop-correct-display')!;
+  const roundEl = document.getElementById('stroop-round-display')!;
+  const timeEl = document.getElementById('stroop-time-display')!;
+
+  function show(): void {
+    if (round > cfg.total) { finish(); return; }
+    const wordColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    let displayColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    if (Math.random() < cfg.incongruent) {
+      while (displayColor.hex === wordColor.hex) displayColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    } else displayColor = wordColor;
+
+    currentColor = displayColor.hex;
+    wordEl.textContent = wordColor.name;
+    wordEl.style.color = displayColor.hex;
+    wordEl.classList.remove('st-pop');
+    void wordEl.offsetWidth;
+    wordEl.classList.add('st-pop');
+    roundStart = Date.now();
+  }
+
+  function answer(color: string): void {
+    if (over || round > cfg.total) return;
+    const elapsed = (Date.now() - roundStart) / 1000;
+
+    if (color === currentColor) {
+      correct++; score += Math.max(1, Math.round(25 - elapsed * 5));
+      times.push(elapsed);
+      fbEl.textContent = '✓';
+      fbEl.className = 'stroop-feedback st-ok';
+    } else {
+      fbEl.textContent = '✗';
+      fbEl.className = 'stroop-feedback st-err';
+      wordEl.classList.add('st-shake');
+      setTimeout(() => wordEl.classList.remove('st-shake'), 400);
+    }
+    setTimeout(() => { fbEl.className = 'stroop-feedback'; }, 500);
+    round++;
+    update();
+    show();
+  }
+
+  function update(): void {
+    scoreEl.textContent = String(score);
+    correctEl.textContent = String(correct);
+    roundEl.textContent = `${Math.min(round, cfg.total)}/${cfg.total}`;
+    const avg = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+    timeEl.textContent = `${avg.toFixed(1)}s`;
+  }
+
+  function finish(): void {
+    over = true;
+    saveScore('stroop-test', score);
+    wordEl.textContent = 'Done!';
+    wordEl.style.color = 'var(--text-primary)';
+    fbEl.textContent = '';
+    const acc = Math.round((correct / cfg.total) * 100);
+    (window as any).__gameFeedback?.({
+      type: acc >= 80 ? 'win' : 'lose',
+      title: acc >= 80 ? 'Sharp Focus!' : 'Test Complete',
+      score: `${acc}%`,
+      detail: `${correct}/${cfg.total} · ${difficulty}`,
+    });
+  }
+
+  function init(): void {
+    cfg = DIFF[difficulty];
+    round = 1; score = 0; correct = 0; times = []; over = false;
+    fbEl.textContent = '';
+    update(); show();
+  }
+
+  document.getElementById('stroop-buttons')!.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest('.stroop-btn');
+    if (btn) answer(btn.getAttribute('data-color')!);
+  });
+
+  document.querySelectorAll('.st-diff-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.st-diff-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = (b as HTMLElement).dataset.diff as keyof typeof DIFF;
+      init();
+    });
+  });
+  document.getElementById('stroop-restart-btn')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #stroop-test-game .stroop-display {
+    text-align: center; min-height: 140px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #stroop-test-game .stroop-word {
+    font-family: var(--font-display); font-size: 4rem; font-weight: 800;
+    margin-bottom: var(--space-2); text-transform: uppercase;
+  }
+  #stroop-test-game .stroop-word.st-pop { animation: st-pop 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes st-pop { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+  #stroop-test-game .stroop-word.st-shake { animation: st-shake 0.4s ease; }
+  @keyframes st-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+
+  #stroop-test-game .stroop-feedback {
+    font-size: 1.5rem; font-weight: 700; min-height: 28px;
+  }
+  #stroop-test-game .stroop-feedback.st-ok { color: var(--accent-green); animation: st-fb-pop 0.3s ease; }
+  #stroop-test-game .stroop-feedback.st-err { color: var(--accent-red); animation: st-fb-pop 0.3s ease; }
+  @keyframes st-fb-pop { 0%{transform:scale(0.5)} 100%{transform:scale(1)} }
+
+  #stroop-test-game .stroop-prompt { font-size: var(--text-sm); color: var(--text-muted); }
+  #stroop-test-game .stroop-buttons {
+    display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; margin: var(--space-4) 0;
+  }
+  #stroop-test-game .stroop-btn {
+    width: 72px; height: 72px; border: 3px solid transparent; border-radius: 50%;
+    cursor: pointer; font-size: var(--text-xs); font-weight: 700; color: #fff;
+    transition: all 0.15s; text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  #stroop-test-game .stroop-btn:hover { transform: scale(1.15); border-color: #fff; box-shadow: 0 0 16px rgba(255,255,255,0.2); }
+  #stroop-test-game .stroop-btn:active { transform: scale(0.95); }
+
+  #stroop-test-game .stroop-actions { text-align: center; margin-top: var(--space-4); }
+  #stroop-test-game .stroop-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); }
+  #stroop-test-game .st-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #stroop-test-game .st-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+
+  @media (max-width: 768px) {
+    #stroop-test-game .stroop-word { font-size: 2.5rem; }
+    #stroop-test-game .stroop-btn { width: 56px; height: 56px; }
+  }
+</style>

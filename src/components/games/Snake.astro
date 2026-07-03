@@ -1,0 +1,210 @@
+---
+// Snake — classic with effects
+---
+
+<div class="game-container" id="snake-game">
+  <canvas id="sn-canvas" class="sn-canvas"></canvas>
+  <div class="game-stats">
+    <div class="stat"><span class="stat-value" id="sn-score">0</span><span class="stat-label">Score</span></div>
+    <div class="stat"><span class="stat-value" id="sn-best">0</span><span class="stat-label">Best</span></div>
+    <div class="stat"><span class="stat-value" id="sn-length">3</span><span class="stat-label">Length</span></div>
+  </div>
+  <div class="sn-actions">
+    <div class="sn-difficulty"><button class="game-btn game-btn--secondary sn-diff-btn active" data-diff="easy">Easy</button><button class="game-btn game-btn--secondary sn-diff-btn" data-diff="medium">Medium</button><button class="game-btn game-btn--secondary sn-diff-btn" data-diff="hard">Hard</button></div>
+    <button class="game-btn game-btn--primary" id="sn-restart">New Game</button>
+  </div>
+  <p class="sn-hint">←→↑↓ or WASD · P pause · Touch: swipe</p>
+</div>
+
+<script>
+  import { saveScore } from '../../lib/scoring';
+
+  const DIFF = { easy: { speed: 8, cell: 22, pts: 10 }, medium: { speed: 12, cell: 20, pts: 15 }, hard: { speed: 16, cell: 18, pts: 20 } };
+  let diff: keyof typeof DIFF = 'easy', cfg = DIFF[diff];
+  const canvas = document.getElementById('sn-canvas') as HTMLCanvasElement, ctx = canvas.getContext('2d')!;
+  let W = 480, H = 480, cols = 20, rows = 20, cell = 24;
+  let snake: number[][] = [], food: number[] = [10, 10], dir: number[] = [1, 0], nextDir: number[] = [1, 0];
+  let score = 0, best = parseInt(localStorage.getItem('snake-best') || '0'), tick = 0, baseSpeed = 8, currentSpeed = 4;
+  let over = false, running = false, paused = false, loopId = 0, readyCount = 0;
+  let particles: number[][] = [], foodPulse = 0;
+  let touchStart: number[] = [0, 0];
+
+  const sEl = document.getElementById('sn-score')!, bEl = document.getElementById('sn-best')!, lEl = document.getElementById('sn-length')!;
+
+  function resize(): void {
+    const r = canvas.parentElement!.getBoundingClientRect();
+    const s = Math.min(480, r.width - 32);
+    W = s; H = s;
+    canvas.width = W; canvas.height = H;
+    cell = W / cols;
+  }
+
+  function spawnFood(): void {
+    const taken = new Set(snake.map(s => `${s[0]},${s[1]}`));
+    const avail: number[][] = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!taken.has(`${c},${r}`)) avail.push([c, r]);
+    if (avail.length) food = avail[Math.floor(Math.random() * avail.length)];
+  }
+
+  function spawnParticles(x: number, y: number, color: string, n: number): void {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
+      particles.push([x, y, Math.cos(a) * s, Math.sin(a) * s, 10 + Math.random() * 10, color]);
+    }
+  }
+
+  function update(): void {
+    if (!running || over || paused) return;
+    tick++;
+
+    // Ready countdown: 3-2-1-GO
+    if (readyCount > 0) {
+      if (tick % 50 === 0) readyCount--;
+      return;
+    }
+
+    // Speed: starts at 5%, +5% every 2 segments, caps at 100%
+    currentSpeed = baseSpeed * Math.min(1, 0.05 + Math.floor((snake.length - 3) / 2) * 0.05);
+    const interval = Math.max(1, Math.floor(16 / currentSpeed));
+    if (tick % interval !== 0) return;
+    foodPulse = (foodPulse + 1) % 60;
+
+    dir = [...nextDir];
+    const head = snake[snake.length - 1];
+    const nx = head[0] + dir[0], ny = head[1] + dir[1];
+
+    // Wall collision
+    if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) { endGame(); return; }
+
+    // Self collision
+    if (snake.some(s => s[0] === nx && s[1] === ny)) { endGame(); return; }
+
+    snake.push([nx, ny]);
+
+    if (nx === food[0] && ny === food[1]) {
+      score += cfg.pts;
+      sEl.textContent = String(score); lEl.textContent = String(snake.length);
+      if (score > best) { best = score; localStorage.setItem('snake-best', String(best)); bEl.textContent = String(best); }
+      spawnParticles(food[0] * cell + cell / 2, food[1] * cell + cell / 2, '#FFD740', 12);
+      spawnParticles(food[0] * cell + cell / 2, food[1] * cell + cell / 2, '#FF9100', 6);
+      spawnFood();
+    } else {
+      snake.shift();
+    }
+  }
+
+  function endGame(): void {
+    over = true; running = false;
+    spawnParticles(snake[snake.length - 1][0] * cell + cell / 2, snake[snake.length - 1][1] * cell + cell / 2, '#FF5252', 20);
+    saveScore('snake', score);
+    setTimeout(() => { (window as any).__gameFeedback?.({ type: 'lose', title: 'Game Over', score: `${score}`, detail: `Length: ${snake.length} · ${diff}` }); }, 600);
+  }
+
+  function draw(): void {
+    ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 0.5;
+    for (let r = 0; r <= rows; r++) { ctx.beginPath(); ctx.moveTo(0, r * cell); ctx.lineTo(W, r * cell); ctx.stroke(); }
+    for (let c = 0; c <= cols; c++) { ctx.beginPath(); ctx.moveTo(c * cell, 0); ctx.lineTo(c * cell, H); ctx.stroke(); }
+
+    // Food
+    const fp = 1 + Math.sin(foodPulse * 0.15) * 0.2;
+    const fx = food[0] * cell + cell / 2, fy = food[1] * cell + cell / 2, fr = cell * 0.35 * fp;
+    const fgrad = ctx.createRadialGradient(fx, fy, fr * 0.2, fx, fy, fr);
+    fgrad.addColorStop(0, '#FFD740'); fgrad.addColorStop(0.6, '#FF9100'); fgrad.addColorStop(1, 'rgba(255,145,0,0)');
+    ctx.fillStyle = fgrad; ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+
+    // Snake
+    for (let i = 0; i < snake.length; i++) {
+      const s = snake[i], x = s[0] * cell + 2, y = s[1] * cell + 2, w = cell - 4;
+      const t = i / snake.length; // 0=head, 1=tail
+      const r = Math.floor(0 + t * 255), g = Math.floor(229 - t * 180), b = Math.floor(255 - t * 200);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      const cr = i === snake.length - 1 ? 6 : 3;
+      ctx.fillRect(x, y, w, w);
+
+      // Eyes on head
+      if (i === snake.length - 1) {
+        ctx.fillStyle = '#fff';
+        const ex = x + w / 2, ey = y + w / 3;
+        ctx.beginPath(); ctx.arc(ex - 3, ey, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ex + 3, ey, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(ex - 3 + dir[0] * 1.5, ey + dir[1] * 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ex + 3 + dir[0] * 1.5, ey + dir[1] * 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // Particles
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      ctx.fillStyle = p[5]; ctx.globalAlpha = p[4] / 15;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 2 + p[4] * 0.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Countdown overlay
+    if (readyCount > 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Outfit, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(String(readyCount), W / 2, H / 2 + 16);
+    } else if (readyCount === 0 && tick < 40) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#00E676'; ctx.font = 'bold 36px Outfit, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('GO!', W / 2, H / 2 + 12);
+    }
+  }
+
+  function loop(): void {
+    update();
+    for (let i = particles.length - 1; i >= 0; i--) { particles[i][0] += particles[i][2]; particles[i][1] += particles[i][3]; particles[i][4]--; if (particles[i][4] <= 0) particles.splice(i, 1); }
+    if (particles.length > 60) particles.splice(0, particles.length - 60);
+    draw();
+    loopId = requestAnimationFrame(loop);
+  }
+
+  function setDir(dx: number, dy: number): void {
+    if (dir[0] === -dx && dir[1] === -dy) return; // No reverse
+    nextDir = [dx, dy];
+  }
+
+  function init(): void {
+    cancelAnimationFrame(loopId);
+    cfg = DIFF[diff]; baseSpeed = cfg.speed; currentSpeed = baseSpeed * 0.4; cell = cfg.cell;
+    resize(); cols = Math.floor(W / cell); rows = Math.floor(H / cell);
+    const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2);
+    snake = [[cx - 2, cy], [cx - 1, cy], [cx, cy]];
+    dir = [1, 0]; nextDir = [1, 0];
+    score = 0; tick = 0; readyCount = 3; over = false; running = true; paused = false;
+    particles = []; foodPulse = 0;
+    sEl.textContent = '0'; lEl.textContent = '3'; bEl.textContent = String(best);
+    spawnFood();
+    loopId = requestAnimationFrame(loop);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') setDir(-1, 0);
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') setDir(1, 0);
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') setDir(0, -1);
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') setDir(0, 1);
+    if (e.code === 'KeyP' && !over) paused = !paused;
+  });
+  canvas.addEventListener('touchstart', e => { const t = e.touches[0]; touchStart = [t.clientX, t.clientY]; });
+  canvas.addEventListener('touchend', e => {
+    const t = e.changedTouches[0]; const dx = t.clientX - touchStart[0], dy = t.clientY - touchStart[1];
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0); else setDir(0, dy > 0 ? 1 : -1);
+  });
+  document.querySelectorAll('.sn-diff-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('.sn-diff-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); diff = (b as HTMLElement).dataset.diff as keyof typeof DIFF; init(); }); });
+  document.getElementById('sn-restart')!.addEventListener('click', init);
+  init();
+</script>
+
+<style is:global>
+  #snake-game .sn-canvas { display: block; max-width: 100%; margin: 0 auto; border-radius: var(--radius-lg); border: 2px solid var(--border-medium); background: #0a0a14; }
+  #snake-game .sn-actions { text-align: center; margin-top: var(--space-4); }
+  #snake-game .sn-difficulty { display: flex; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  #snake-game .sn-diff-btn { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
+  #snake-game .sn-diff-btn.active { background: var(--gradient-accent); color: #fff; border-color: transparent; }
+  #snake-game .sn-hint { text-align: center; font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-2); }
+</style>
