@@ -1,8 +1,11 @@
 {
-  "name": "neuroplay",
+  "name": "brain-games-hub",
   "version": "1.0.0",
-  "description": "NeuroPlay - Free online brain training games to test and improve your cognitive abilities",
+  "description": "Brain Games Hub - Free online brain training games",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
