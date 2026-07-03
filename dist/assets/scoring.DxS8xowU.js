@@ -1,1 +1,0 @@
-function e(e,t){if(typeof localStorage>`u`)return;let n=`neuroplay_scores_${e}`,r=JSON.parse(localStorage.getItem(n)||`[]`);r.push({gameId:e,score:t,timestamp:Date.now()}),r.sort((e,t)=>t.timestamp-e.timestamp),localStorage.setItem(n,JSON.stringify(r.slice(0,100)))}export{e as t};
