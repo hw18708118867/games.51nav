@@ -50,9 +50,6 @@ const fullImage = ogImage.startsWith('http') ? ogImage : `${SITE_CONFIG.url}${og
 <meta name="twitter:description" content={description} />
 <meta name="twitter:image" content={fullImage} />
 
-<!-- Global Styles -->
-<link rel="stylesheet" href="/src/styles/global.css" />
-
 <!-- Google Analytics (GA4) via GitHub variable -->
 {import.meta.env.PUBLIC_GA4_ID && (
   <>
