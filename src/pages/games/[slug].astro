@@ -91,11 +91,9 @@ const relatedGames = game.relatedGames
     )}
   </div>
 
-  <div slot="related">
-    {relatedGames.map((g: GameMeta) => (
-      <GameCard game={g} />
-    ))}
-  </div>
+  {relatedGames.map((g: GameMeta, i: number) => (
+    <GameCard game={g} index={i} slot="related" />
+  ))}
 
   <div slot="content">
     <h2>About the {game.shortTitle}</h2>
