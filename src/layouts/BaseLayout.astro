@@ -1,5 +1,6 @@
 ---
 import SEOHead from '../components/seo/SEOHead.astro';
+import OrganizationJsonLd from '../components/seo/OrganizationJsonLd.astro';
 import AnimatedBackground from '../components/effects/AnimatedBackground.astro';
 import '../styles/global.css';
 import '../styles/motion.css';
@@ -60,6 +61,8 @@ const {
     <div id="main-content">
       <slot />
     </div>
+    <!-- Site-wide Structured Data -->
+    <OrganizationJsonLd />
   </body>
 </html>
 

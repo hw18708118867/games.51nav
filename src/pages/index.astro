@@ -108,6 +108,32 @@ const featuredGames = sortedGames.slice(0, 9);
   </main>
 
   <Footer />
+
+  <!-- Homepage Structured Data: CollectionPage + ItemList -->
+  <script type="application/ld+json" set:html={JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: SITE_CONFIG.name,
+    description: SITE_CONFIG.description,
+    url: SITE_CONFIG.url,
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: featuredGames.length,
+      itemListElement: featuredGames.map((game, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        item: {
+          '@type': 'VideoGame',
+          name: game.title,
+          url: `${SITE_CONFIG.url}/games/${game.slug}/`,
+          description: game.description,
+          playMode: 'SinglePlayer',
+          applicationCategory: 'GameApplication',
+          operatingSystem: 'Web',
+        },
+      })),
+    },
+  })} />
 </BaseLayout>
 
 <style>
